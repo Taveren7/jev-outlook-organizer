@@ -1,3 +1,4 @@
+import {messageSummary,outlookWebLink} from './message-summary';
 import {healthReport,reviewReasons} from './health';
 import {previewReview,applyReview,type ReviewContext} from './review';
 import {fingerprint,parseRelationships} from '../relationships';
@@ -50,11 +51,17 @@ export class MailboxCoordinator {
     if(request.method==='GET'&&path==='/health')return json(this.health());
     if(request.method==='GET'&&path==='/review'){
       const after=url.searchParams.get('after')??'';if(after.length>2048)return json({error:'invalid_cursor'},400);
-      const rows=this.ledger.page(after);return json({rows:rows.map(job=>({id:job.id,stage:job.stage,receivedAt:job.receivedAt,type:job.classification?.type.choice,reasons:reviewReasons(job,CONFIG.routing.choiceConfidence,CONFIG.routing.choiceProbability,CONFIG.routing.securityHold)})),next:rows.length===100?rows.at(-1)!.id:null});
+      const limit=Number(url.searchParams.get('limit')??100);if(!Number.isInteger(limit)||limit<1||limit>100)return json({error:'invalid_limit'},400);
+      const rows=this.ledger.page(after,limit);return json({rows:rows.map(job=>({id:job.id,stage:job.stage,receivedAt:job.receivedAt,type:job.classification?.type.choice,reasons:reviewReasons(job,CONFIG.routing.choiceConfidence,CONFIG.routing.choiceProbability,CONFIG.routing.securityHold)})),next:rows.length===limit?rows.at(-1)!.id:null});
+    }
+    if(request.method==='GET'&&path==='/review/message'){
+      const id=url.searchParams.get('id')??'';if(!id||id.length>2048||!this.ledger.job(id))return json({error:'review_job_missing'},404);
+      try{const item=await new ProductionGraph(this.env).request('/messages/'+encodeURIComponent(id)+'?$select=subject,from,bodyPreview');return json(messageSummary(item));}
+      catch{return json({error:'message_summary_unavailable'},502);}
     }
     if(request.method==='GET'&&path==='/review/open'){
-      const id=url.searchParams.get('id')??'';if(!this.ledger.job(id))return json({error:'review_job_missing'},404);
-      try{const item=await new ProductionGraph(this.env).request('/messages/'+encodeURIComponent(id)+'?$select=webLink');const link=new URL(item.webLink);if(link.protocol!=='https:'||link.username||link.password||!['outlook.office.com','outlook.office365.com'].includes(link.hostname))throw Error('invalid_link');return json({url:link.href});}catch{return json({error:'message_link_unavailable'},404);}
+      const id=url.searchParams.get('id')??'';if(!id||id.length>2048||!this.ledger.job(id))return json({error:'review_job_missing'},404);
+      try{const item=await new ProductionGraph(this.env).request('/messages/'+encodeURIComponent(id)+'?$select=webLink');return json({url:outlookWebLink(item.webLink)});}catch{return json({error:'message_link_unavailable'},404);}
     }
     if(request.method==='GET'&&path==='/review/ticket'){const ticket=this.ledger.review(url.searchParams.get('id')??'');return ticket?json(ticket):json({error:'review_missing'},404);}
     if(request.method==='POST'&&['/review/preview','/review/apply'].includes(path)){

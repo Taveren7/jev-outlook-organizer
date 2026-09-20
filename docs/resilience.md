@@ -6,7 +6,11 @@ Health shows recorded job counts, unresolved error codes, pending work, regular 
 
 ## Preview and apply
 
-Pause the organizer before review operations. In the dashboard, open the message in Outlook to inspect it, select an operation and choose Preview. Previewing a reclassification sends that message to Jev and can incur usage. Apply is a separate explicit action, with fresh state and configuration checks. Resume the background service when finished. CLI equivalents:
+The review list loads 20 records at a time, showing each message’s subject, sender name/address and up to 255 characters of plain-text preview fetched live from Microsoft. These summaries stay in page memory, are not stored in the durable ledger/audit or browser storage, and use authenticated, non-cacheable responses. Viewing them makes no mailbox writes, preserves unread state and uses no Jev calls. Unavailable messages show a retry control. Summary text is displayed literally; email HTML, links, images and attachments are not loaded. The decision beside a summary is historical and may differ from the current message.
+
+Use **Open Microsoft 365 work email** to sign in with your organization’s email address; no personal Outlook.com account is required. If Microsoft selects a personal account, choose **Sign in with a different account**. After signing into the correct mailbox in the same browser, **Open message in Outlook** uses Microsoft’s message link. Opening a message there follows your Outlook reading settings. See [Microsoft’s work-account sign-in guide](https://support.microsoft.com/en-us/outlook/how-to-sign-in-to-outlook-on-the-web).
+
+Pause the organizer before review operations. Inspect the summary (or open the full message in Outlook), select an operation and choose Preview. Previewing a reclassification sends that message to Jev and can incur usage. Apply is a separate explicit action, with fresh state and configuration checks. Resume the background service when finished. CLI equivalents:
 
 ```sh
 npm run service -- health
