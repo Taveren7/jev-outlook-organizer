@@ -53,7 +53,7 @@ This release supports customization during initial onboarding. For later schema 
 
 ## Expanded preset for a new installation
 
-[organizer.extended.example.json](../organizer.extended.example.json) adds three Types to the original ten:
+Choose any **2–30 Types** for a new installation. The default ten-category file and [thirteen-category example](../organizer.extended.example.json) are editable starting points, not separate editions or restrictions. Keep only the categories you need, rename them or define different ones before running setup. The filename uses `extended` because this example adds these three categories to the original ten:
 
 | Folder | Main purpose |
 | --- | --- |
@@ -63,6 +63,6 @@ This release supports customization during initial onboarding. For later schema 
 
 Specific customer, supplier, production, maintenance and IT work keeps its specific Type. Proof-of-purchase receipts remain Receipts & Docs; unsolicited promotions remain Newsletters. A personal email domain alone does not establish Personal. These are classification descriptions, not keyword rules or measured accuracy claims.
 
-Before your first mailbox setup or deployment, copy this example over `organizer.config.json`, then edit your context and run `npm run config:check`. On Windows PowerShell use `Copy-Item organizer.extended.example.json organizer.config.json`; on macOS/Linux use `cp organizer.extended.example.json organizer.config.json`. The normal onboarding preview includes all thirteen folders/categories. The optional Search Folder setup scopes the task views to Inbox plus all thirteen Types. The dashboard correction menu uses the same configured Types.
+Before your first mailbox setup or deployment, copy this example over `organizer.config.json`, then edit your context and run `npm run config:check`. On Windows PowerShell use `Copy-Item organizer.extended.example.json organizer.config.json`; on macOS/Linux use `cp organizer.extended.example.json organizer.config.json`. The onboarding preview includes whichever folders/categories you keep in your edited configuration. Optional Search Folder setup covers Inbox plus all configured Types. The dashboard correction menu uses those same Types.
 
 The default configuration is unchanged so a code upgrade does not change an existing profile. Do not copy this preset over an active installation; follow the migration guidance above. No existing mail is automatically reclassified by this release.

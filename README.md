@@ -52,7 +52,7 @@ Confidence and the selected option's probability are separate checks. Typed answ
 | Conference registration and travel logistics | Travel & Events* | Trip/event coordination, distinct from a paid receipt |
 | Family asks about a household appointment | Personal* | Personal purpose must be supported by the content |
 
-*Intended examples describe the category boundaries, not recorded predictions. Starred folders are included in the optional [expanded preset](organizer.extended.example.json) for **new installations**. The default profile has ten Types; the expanded preset has thirteen. You can define your own Types and descriptions before onboarding.*
+*Intended examples describe the category boundaries, not recorded predictions. **Choose any 2–30 Types during setup:** add, remove, rename or redefine categories to fit your mailbox. The bundled ten-category configuration and [13-category example](organizer.extended.example.json), which includes the starred folders, are editable starting points. They are not separate editions or limits. Choose your categories before first deployment; later changes to a live profile need a migration.*
 
 In **type-folders** mode, the defaults require Type confidence **≥ 80%**, selected-Type probability **≥ 80%**, security-risk score **< 70%**, and non-truncated input. Current-state and prior-work protections also apply. An uncertain action can still be filed by a clear Type while retaining review/task labels. An uncertain Type stays in Inbox for review. [Exact routing behavior and modes](docs/operations.md)
 
@@ -97,7 +97,7 @@ npm run setup
 
 `setup` creates a private local `.env` and an admin token. It does not connect to your mailbox or deploy anything.
 
-1. **Choose your categories:** edit [organizer.config.json](organizer.config.json), or start a new installation from the [expanded preset](docs/configuration.md#expanded-preset-for-a-new-installation).
+1. **Choose your categories:** edit [organizer.config.json](organizer.config.json), or start a new installation from the [13-category example](docs/configuration.md#expanded-preset-for-a-new-installation).
 2. **Connect your accounts:** follow the [full onboarding guide](docs/setup.md) for scoped Microsoft permissions and your Jev/Cloudflare credentials.
 3. **Preview, then apply setup:** review folder/category creation and deployment. A new service starts **paused**.
 4. **Inspect a prediction:** `npm run preview -- --latest` sends one real message to Jev and proposes changes without modifying mail.
