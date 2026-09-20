@@ -1,3 +1,6 @@
+import {healthReport,reviewReasons} from './health';
+import {previewReview,applyReview,type ReviewContext} from './review';
+import {fingerprint,parseRelationships} from '../relationships';
 import {CONFIG,PROFILE_ID} from '../config';
 import type {DurableObjectState, DurableObjectNamespace} from '@cloudflare/workers-types';
 import {inventoryInbox} from '../backfill';
@@ -9,7 +12,7 @@ import {Ledger} from './store';
 import {productionFetch,throttled} from './transport';
 
 export interface ProductionEnv extends GraphConfig {
-  TYPESAFE_API_KEY:string; ADMIN_TOKEN:string; MAILBOX_LAYOUT:string;
+  TYPESAFE_API_KEY:string; ADMIN_TOKEN:string; RELATIONSHIP_CONTEXT?:string; MS_SECRET_EXPIRES_AT?:string; MAILBOX_LAYOUT:string;
   COORDINATOR:DurableObjectNamespace;
 }
 const json=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cache-Control':'no-store'}});
@@ -18,7 +21,7 @@ function safeError(error:unknown){
   const message=error instanceof Error?error.message:'';
   const status=/^Inbox inventory failed \((\d{3})\); no mail changed$/.exec(message)?.[1];
   if(status)return 'inventory_'+status;
-  const known:Record<string,string>={'Microsoft authentication failed':'microsoft_authentication_failed','Invalid Microsoft token response':'microsoft_token_invalid','Unsafe or repeated pagination link':'pagination_rejected','Server result outside cleanup window':'inventory_outside_window','Invalid inbox inventory':'inventory_invalid','Invalid message metadata':'metadata_invalid','Too many subrequests.':'subrequest_limit','The operation was aborted due to timeout':'request_timeout','account_changed':'account_changed','layout_invalid':'layout_invalid','incomplete_inventory':'incomplete_inventory','profile_changed':'profile_changed'};
+  const known:Record<string,string>={'Microsoft authentication failed':'microsoft_authentication_failed','Invalid Microsoft token response':'microsoft_token_invalid','Unsafe or repeated pagination link':'pagination_rejected','Server result outside cleanup window':'inventory_outside_window','Invalid inbox inventory':'inventory_invalid','Invalid message metadata':'metadata_invalid','Too many subrequests.':'subrequest_limit','The operation was aborted due to timeout':'request_timeout','account_changed':'account_changed','layout_invalid':'layout_invalid','incomplete_inventory':'incomplete_inventory','relationships_invalid':'relationships_invalid','profile_changed':'profile_changed'};
   return known[message]??'coordinator_failed';
 }
 export class MailboxCoordinator {
@@ -26,8 +29,9 @@ export class MailboxCoordinator {
   private busy=false;
   constructor(private state:DurableObjectState,private env:ProductionEnv){this.ledger=new Ledger(state.storage.sql);}
   private running=()=>!this.ledger.get('paused',true);
-  private save=async(job:Job)=>{this.ledger.save(job);};
+  private save=async(job:Job)=>{this.ledger.save(job);if(job.reviewId){const r=this.ledger.review(job.reviewId);if(r&&['done','held','failed'].includes(job.stage)){r.state=job.stage==='done'?'applied':'blocked';r.finishedAt=Date.now();r.error=job.error;this.ledger.saveReview(r);}}};
   private layout(){
+    parseRelationships(this.env.RELATIONSHIP_CONTEXT,Object.keys(JSON.parse(this.env.MAILBOX_LAYOUT).folders??{}));
     const fingerprint=[this.env.MS_TENANT_ID,this.env.MS_CLIENT_ID,this.env.MS_MAILBOX_ID].join('/');
     if(this.ledger.get('account',fingerprint)!==fingerprint)throw Error('account_changed');
     if(this.ledger.get('profile',PROFILE_ID)!==PROFILE_ID)throw Error('profile_changed');
@@ -35,8 +39,29 @@ export class MailboxCoordinator {
     this.ledger.set('account',fingerprint);return validateLayout(this.env.MAILBOX_LAYOUT,this.env.MS_MAILBOX_ID);
   }
   private status(){return {service:'jev-outlook',policy:POLICY_VERSION,paused:!this.running(),mode:this.ledger.get<Mode>('mode','observe'),busy:this.busy,processing:'continuous',catchup:this.ledger.get('catchup',null),cooldownUntil:this.ledger.get('cooldownUntil',0),scanPhase:this.ledger.get('scanPhase',null),dailyLimit:this.ledger.get('dailyLimit',100),today:this.ledger.budget(Date.now()),jobs:this.ledger.counts(),lastScan:this.ledger.get('lastScan',0),lastSuccess:this.ledger.get('lastSuccess',0),lastClassification:this.ledger.get('lastClassification',0),lastError:this.ledger.get('lastError',null),launchAt:this.ledger.get('launchAt',0)};}
+  private health(){const d=this.ledger.diagnostics();return healthReport({now:Date.now(),paused:!this.running(),lastScan:this.ledger.get('lastScan',0),lastSuccess:this.ledger.get('lastSuccess',0),dailyLimit:this.ledger.get('dailyLimit',100),used:this.ledger.budget(Date.now()).regularCalls,cooldownUntil:this.ledger.get('cooldownUntil',0),lastError:this.ledger.get('lastError',null),secretExpiresAt:this.env.MS_SECRET_EXPIRES_AT,counts:this.ledger.counts() as any,issues:d.issues as any,oldestPending:d.oldestPending});}
+  private async reviewContext():Promise<ReviewContext>{
+    const layout=this.layout();return {ledger:this.ledger,mail:new ProductionGraph(this.env),layout,revision:await fingerprint([POLICY_VERSION,this.env.MAILBOX_LAYOUT,this.env.RELATIONSHIP_CONTEXT??'',PROFILE_ID]),policyVersion:POLICY_VERSION,securityHold:CONFIG.routing.securityHold,now:Date.now,paused:()=>!this.running(),save:this.save,
+      reserve:()=>{if(Date.now()<this.ledger.get('cooldownUntil',0))throw Error('review_provider_cooldown');return this.ledger.reserve(Date.now(),false,this.ledger.get('dailyLimit',100));},
+      classify:async message=>{try{return await classifyMessage(message,this.env.TYPESAFE_API_KEY,productionFetch,this.env.RELATIONSHIP_CONTEXT);}catch(error){const throttle=throttled(error);if(throttle)this.ledger.set('cooldownUntil',Date.now()+throttle.retryAfterMs);throw error;}}};
+  }
   async fetch(request:Request):Promise<Response>{
     const url=new URL(request.url),path=url.pathname;
+    if(request.method==='GET'&&path==='/health')return json(this.health());
+    if(request.method==='GET'&&path==='/review'){
+      const after=url.searchParams.get('after')??'';if(after.length>2048)return json({error:'invalid_cursor'},400);
+      const rows=this.ledger.page(after);return json({rows:rows.map(job=>({id:job.id,stage:job.stage,receivedAt:job.receivedAt,type:job.classification?.type.choice,reasons:reviewReasons(job,CONFIG.routing.choiceConfidence,CONFIG.routing.choiceProbability,CONFIG.routing.securityHold)})),next:rows.length===100?rows.at(-1)!.id:null});
+    }
+    if(request.method==='GET'&&path==='/review/open'){
+      const id=url.searchParams.get('id')??'';if(!this.ledger.job(id))return json({error:'review_job_missing'},404);
+      try{const item=await new ProductionGraph(this.env).request('/messages/'+encodeURIComponent(id)+'?$select=webLink');const link=new URL(item.webLink);if(link.protocol!=='https:'||link.username||link.password||!['outlook.office.com','outlook.office365.com'].includes(link.hostname))throw Error('invalid_link');return json({url:link.href});}catch{return json({error:'message_link_unavailable'},404);}
+    }
+    if(request.method==='GET'&&path==='/review/ticket'){const ticket=this.ledger.review(url.searchParams.get('id')??'');return ticket?json(ticket):json({error:'review_missing'},404);}
+    if(request.method==='POST'&&['/review/preview','/review/apply'].includes(path)){
+      if(this.running()||this.busy)return json({error:'pause_first'},409);this.busy=true;
+      try{const raw=await request.text();if(raw.length>8192)return json({error:'review_request_too_large'},400);const body=JSON.parse(raw),c=await this.reviewContext();const ticket=path==='/review/preview'?await previewReview(c,body):await applyReview(c,body.ticketId);if(ticket.state==='recovery_required')this.ledger.set('lastError',{code:'review_operation_interrupted',at:Date.now()});return json(ticket);}
+      catch{return json({error:'review_request_failed_check_state_and_configuration'},409);}finally{this.busy=false;}
+    }
     if(request.method==='GET'&&path==='/status')return json(this.status());
     if(request.method==='GET'&&path==='/jobs')return json(this.ledger.jobs());
     if(request.method==='GET'&&path==='/audit')return json(this.ledger.audit(Math.max(0,Number(url.searchParams.get('after'))||0)));
@@ -129,7 +154,7 @@ export class MailboxCoordinator {
         if(!this.running())throw new PauseError();
         if(!this.ledger.reserve(Date.now(),Date.parse(job.receivedAt)<this.ledger.get('launchAt',0),this.ledger.get('dailyLimit',100),job.receivedAt))return;
         job={...job,stage:'classifying',attempts:job.attempts+1,updatedAt:Date.now()};await this.save(job);
-        const result=await classifyMessage(content.message,this.env.TYPESAFE_API_KEY,productionFetch);
+        const result=await classifyMessage(content.message,this.env.TYPESAFE_API_KEY,productionFetch,this.env.RELATIONSHIP_CONTEXT);
         const mode=this.ledger.get<Mode>('mode','observe');
         job={...job,...result,policyVersion:POLICY_VERSION,plan:routingPlan(before,result.classification,result.limitations,layout,mode,Date.now()),stage:mode==='observe'?'observed':'planned',updatedAt:Date.now()};
         await this.save(job);

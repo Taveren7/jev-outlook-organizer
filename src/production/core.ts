@@ -11,9 +11,10 @@ export interface Layout { mailboxId: string; inboxId: string; folders: Record<ke
 export interface Plan { before: Metadata; categories: string[]; finalCategories: string[]; destination: Folder | null; disposition: string }
 export type Stage = 'pending' | 'classifying' | 'retry' | 'planned' | 'patching' | 'patched' | 'moving' | 'moved' | 'stripping' | 'done' | 'observed' | 'held' | 'failed' | 'protected' | 'expired';
 export interface Job {
+  classifierContextVersion?:string;
   id: string; receivedAt: string; stage: Stage; attempts: number; due: number; updatedAt: number;
   plan?: Plan; checkpoint?: Metadata; classification?: Classification; model?: string; limitations?: string[];
-  error?: string; after?: Metadata; policyVersion?: string;
+  error?: string; after?: Metadata; policyVersion?: string; reviewId?:string; reviewOperation?:string;
 }
 export interface MailAdapter {
   metadata(id: string): Promise<Metadata>;
@@ -104,7 +105,7 @@ export async function applyJob(job:Job,mail:MailAdapter,save:(job:Job)=>Promise<
     if(p.destination){
       if(!withinWindow(current.receivedDateTime,now()))return hold('aged_out_before_move');
       const f=await mail.folder(p.destination.id);
-      if(f.id!==p.destination.id||f.displayName!==p.destination.displayName||f.parentFolderId!==p.before.parentFolderId)return hold('destination_changed');
+      if(f.id!==p.destination.id||f.displayName!==p.destination.displayName||f.parentFolderId!==p.destination.parentFolderId)return hold('destination_changed');
       current=await fresh();try{assertLayoutState(job.checkpoint,current);}catch{return hold('user_state_changed');}
       active();await record('moving',current);active();await mail.move(job.id,p.before.parentFolderId,f.id);
       current=await fresh();if(!preserved(p.before,current,p.categories,f.id))return hold('move_verification_changed');

@@ -139,3 +139,9 @@ npm run service -- resume --mode type-folders --limit 100
 Both include unprocessed Inbox mail within the configured lookback window. Use a small `lookbackDays` before initial setup if you want less history. Review several actual outcomes and classifier decisions before expanding use. A passing connectivity check or test suite is not a model-accuracy benchmark.
 
 Pause at any time with `npm run service -- pause`. For catch-up, observation mode, audits and recovery, see [operations](operations.md).
+
+## Private context and health dashboard
+
+Setup creates `private/relationships.json`. Populate customer, supplier and internal domains there, using the keys described in [the resilience guide](resilience.md). Keep `RELATIONSHIP_CONTEXT_FILE=private/relationships.json` in `.env`; custom-taxonomy defaults must name your configured Type keys. Deployment validates and uploads this data as a Worker secret without printing its contents. Set `MS_SECRET_EXPIRES_AT` to the Microsoft secret expiry date for dashboard warnings. Neither setting changes the category profile or replays existing mail. Deployment previews bind the relationship content and expiry setting too; rerun preview after editing them.
+
+After deployment, open `<your Worker URL>/dashboard` and enter the existing admin token from your private `.env`. Do not put the token into a bookmark or URL. Dashboard alerts refresh while the page is open; no external notifications are sent.

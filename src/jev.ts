@@ -1,9 +1,11 @@
+import {parseRelationships,relationshipContext,fingerprint} from './relationships';
 import {CONFIG} from './config';
 import { TypeSafeClient, type Fetch } from '@typesafe-ai/sdk';
 import type { MailInput } from './graph';
 import { QUESTIONS, parseClassification } from './taxonomy';
 
-export function prepareState(message: MailInput) {
+export function prepareState(message: MailInput, relationships?:string) {
+  const context=parseRelationships(relationships,Object.keys(CONFIG.types));
   const limitations: string[] = [];
   if (message.bodyText.length > CONFIG.maxBodyCharacters) limitations.push('Message body truncated; human review required.');
   if (message.hasAttachments) limitations.push('Attachments not analyzed; human review required.');
@@ -12,6 +14,7 @@ export function prepareState(message: MailInput) {
     limitations,
     state: {
       reviewer: CONFIG.ownerContext, organization: CONFIG.organizationContext,
+      ...(context?{business_context:relationshipContext(message,context)}:{}),
       email: {
         subject: message.subject.slice(0, 500), from: message.from,
         to: message.to.slice(0, 30), cc: message.cc.slice(0, 30),
@@ -23,12 +26,12 @@ export function prepareState(message: MailInput) {
   };
 }
 
-export async function classifyMessage(message: MailInput, apiKey: string, transport?: Fetch) {
-  const prepared = prepareState(message);
+export async function classifyMessage(message: MailInput, apiKey: string, transport?: Fetch, relationships?:string) {
+  const prepared = prepareState(message,relationships);
   const client = new TypeSafeClient({
     apiKey, baseURL: 'https://api.typesafe.ai', defaultModel: CONFIG.model,
     logLevel: 'off', timeout: 20_000, retry: { maxRetries: 0 }, fetch: transport,
   });
   const response = await client.systemOne({ state: prepared.state, questions: QUESTIONS });
-  return { classification: parseClassification(response.answers), model: response.model, limitations: prepared.limitations };
+  return { classifierContextVersion:relationships?'relationships-v2:'+await fingerprint(JSON.parse(relationships)):'relationships-none', classification: parseClassification(response.answers), model: response.model, limitations: prepared.limitations };
 }

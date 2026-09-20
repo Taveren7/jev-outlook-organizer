@@ -1,6 +1,6 @@
 // Deployment preflight reads metadata only. Credentials and provider responses must not be logged.
 export interface DeploymentTarget {accountId:string;workerName:string;serviceUrl:string;exists:boolean}
-export interface DeploymentPlan {target:DeploymentTarget;profile:string;layout:string;createdAt:number}
+export interface DeploymentPlan {target:DeploymentTarget;profile:string;layout:string;createdAt:number;runtimeConfigHash?:string}
 export function serviceUrl(value:string):URL {
  const url=new URL(value);
  if(url.protocol!=='https:'||!/^[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev$/.test(url.hostname)||url.port||url.pathname!=='/'||url.username||url.password||url.search||url.hash)throw Error('Invalid service URL.');
@@ -32,6 +32,6 @@ export async function verifyPaused(target:DeploymentTarget,configuredUrl:string|
  const status=await response.json() as any;
  if(status.service!=='jev-outlook'||status.policy!=='public-v1'||status.paused!==true||status.busy!==false)throw Error('Pause the target public organizer and wait until it is idle before deployment.');
 }
-export function verifyDeploymentPlan(plan:DeploymentPlan,target:DeploymentTarget,profile:string,layout:string,now=Date.now()){
- if(!plan||!Number.isFinite(plan.createdAt)||now<plan.createdAt||now-plan.createdAt>3600000||JSON.stringify(plan.target)!==JSON.stringify(target)||plan.profile!==profile||plan.layout!==layout)throw Error('Deployment preview is missing or stale; run npm run deploy again before applying.');
+export function verifyDeploymentPlan(plan:DeploymentPlan,target:DeploymentTarget,profile:string,layout:string,now=Date.now(),runtimeConfigHash?:string){
+ if(!plan||!Number.isFinite(plan.createdAt)||now<plan.createdAt||now-plan.createdAt>3600000||JSON.stringify(plan.target)!==JSON.stringify(target)||plan.profile!==profile||plan.layout!==layout||plan.runtimeConfigHash!==runtimeConfigHash)throw Error('Deployment preview is missing or stale; run npm run deploy again before applying.');
 }

@@ -64,5 +64,9 @@ export function parseClassification(value: unknown, types:Record<string,string>=
     if (result.type !== 'noul') throw new Error('Invalid Noul');
     probability(result.noul);
   }
-  return answer as unknown as Classification;
+  // Persist only schema fields, even if a provider adds extra response properties.
+  const canonical:Record<string,unknown>={};
+  for(const name of ['attention','type','action']){const v=object(answer[name]);canonical[name]={type:v.type,choice:v.choice,confidence:v.confidence,probabilities:{...object(v.probabilities)}};}
+  for(const name of ['needs_owner','security_risk']){const v=object(answer[name]);canonical[name]={type:v.type,noul:v.noul};}
+  return canonical as unknown as Classification;
 }

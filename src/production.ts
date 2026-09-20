@@ -1,3 +1,4 @@
+import {dashboardResponse} from './production/dashboard';
 import {authorized} from './auth';
 import type {ProductionEnv} from './production/coordinator';
 export {MailboxCoordinator} from './production/coordinator';
@@ -5,6 +6,7 @@ const coordinator=(env:ProductionEnv)=>env.COORDINATOR.get(env.COORDINATOR.idFro
 export default {
   async fetch(request:Request,env:ProductionEnv):Promise<Response>{
     const url=new URL(request.url);
+    if(request.method==='GET'&&['/dashboard','/dashboard.js'].includes(url.pathname))return dashboardResponse(url.pathname);
     if(request.method==='GET'&&url.pathname==='/health')return Response.json({service:'jev-outlook',version:1});
     if(!url.pathname.startsWith('/admin/')||!await authorized(request,env.ADMIN_TOKEN))return Response.json({error:'unauthorized'},{status:401});
     if(!['GET','POST'].includes(request.method))return new Response(null,{status:405});

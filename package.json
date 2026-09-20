@@ -1,6 +1,6 @@
 {
   "name": "jev-outlook-organizer",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,7 +15,7 @@
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "build": "wrangler deploy --dry-run --outdir dist",
-    "test:runtime": "npm run build && tsx tests/runtime/service.ts && tsx tests/runtime/custom-profile.ts"
+    "test:runtime": "npm run build && tsx tests/runtime/service.ts && tsx tests/runtime/custom-profile.ts && tsx tests/runtime/resilience.ts"
   },
   "engines": {
     "node": ">=22.13.0"

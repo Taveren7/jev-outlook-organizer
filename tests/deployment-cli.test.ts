@@ -26,9 +26,10 @@ test('deployment CLI requires a reviewed target and uploads secrets without expo
   assert.notEqual(run(false,{FAKE_EXISTS:'1',JEV_SERVICE_URL:url,FAKE_RUNNING:'1'}).status,0);
   assert.ok(!readFileSync(join(cwd,'calls.jsonl'),'utf8').includes('["deploy"'));
   const preview=run();assert.equal(preview.status,0,preview.stderr);
+  assert.notEqual(run(true,{MS_SECRET_EXPIRES_AT:'2030-01-01'}).status,0);
   const applied=run(true);assert.equal(applied.status,0,applied.stderr);
   for(const secret of [key,admin,'synthetic-cloudflare-token'])assert.ok(!(preview.stdout+preview.stderr+applied.stdout+applied.stderr).includes(secret));
-  const uploaded=JSON.parse(readFileSync(join(cwd,'uploaded.json'),'utf8'));assert.equal(uploaded.ADMIN_TOKEN,admin);assert.equal(uploaded.MS_MAILBOX_ID,mailbox);
+  const uploaded=JSON.parse(readFileSync(join(cwd,'uploaded.json'),'utf8'));assert.equal(uploaded.ADMIN_TOKEN,admin);assert.equal(uploaded.MS_MAILBOX_ID,mailbox);assert.deepEqual(JSON.parse(uploaded.RELATIONSHIP_CONTEXT),{version:1,domains:{},defaults:{}});
   const calls=readFileSync(join(cwd,'calls.jsonl'),'utf8').trim().split('\n').map(s=>JSON.parse(s));assert.equal(calls.filter(c=>c[0]==='deploy').length,1);assert.equal(calls.filter(c=>c[0]==='secret').length,1);
   const config=JSON.parse(readFileSync(join(cwd,'wrangler.local.jsonc'),'utf8'));assert.equal(config.account_id,env.CLOUDFLARE_ACCOUNT_ID);assert.equal(config.name,env.WORKER_NAME);
  }finally{rmSync(cwd,{recursive:true,force:true});}

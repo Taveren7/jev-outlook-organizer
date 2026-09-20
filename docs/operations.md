@@ -10,7 +10,7 @@ npm run service -- jobs
 npm run service -- audit --after 0
 ```
 
-`status` shows pause state, counters, queue counts, last scan/update and sanitized errors. `jobs` exports the latest 100 jobs. Audit is paginated: use the last event sequence as the next `--after`. Exports live under ignored `private/service/` and should not be attached to public issues. No automatic failure alerts or dashboard are included.
+`status` shows pause state, counters, queue counts, last scan/update and sanitized errors. `jobs` exports the latest 100 jobs. Audit is paginated: use the last event sequence as the next `--after`. Exports live under ignored `private/service/` and should not be attached to public issues. The authenticated `/dashboard` displays health alerts while open; external notifications are not configured. See [review and recovery](resilience.md).
 
 ## Why a tagged email can still be in Inbox
 
@@ -36,7 +36,7 @@ npm run service -- promote --id '<private-message-id>' --mode type-folders
 npm run service -- resume --mode type-folders --limit 100
 ```
 
-Promotion does not make another model call; the writer still checks the original message state. Simply switching modes does not replay already done or observed jobs. Existing labels are not a generic instruction to move mail. This release has no bulk replay of completed messages.
+Promotion does not make another model call; the writer still checks the original message state. Simply switching modes does not replay already done or observed jobs. Existing labels are not a generic instruction to move mail. Completed messages can be individually reclassified through an explicit expiring review preview; bulk replay remains unavailable. See [review and recovery](resilience.md).
 
 ## Schedule and model budget
 
@@ -79,7 +79,7 @@ Error output is sanitized. Do not enable raw request/body logging to troubleshoo
 
 ## Recover, rotate and stop
 
-The ledger records intent before each external effect. After an interrupted call, the service reads current state and either recognizes the expected result or holds it for review. Before/after metadata supports an operator-designed reversal; automatic bulk undo is not included.
+The ledger records intent before each external effect. After an interrupted call, the service reads current state and either recognizes the expected result or holds it for review. Before/after metadata supports an operator-designed reversal; guarded per-message undo is available through a reviewed preview; automatic bulk undo is not included.
 
 Before an update, pause and wait for `busy: false`. Keep the existing Durable Object migration and Worker name. Never clear durable storage to retry work. Changing category names, meanings or profile settings after activation requires a deliberate migration; this release does not automate it.
 

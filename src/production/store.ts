@@ -8,6 +8,7 @@ export class Ledger {
     sql.exec('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, stage TEXT NOT NULL, received TEXT NOT NULL, due INTEGER NOT NULL, data TEXT NOT NULL)');
     sql.exec('CREATE INDEX IF NOT EXISTS jobs_ready ON jobs(stage,due,received)');
     sql.exec('CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, id TEXT NOT NULL, stage TEXT NOT NULL, data TEXT NOT NULL)');
+    sql.exec('CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
     sql.exec('CREATE TABLE IF NOT EXISTS budgets (day TEXT PRIMARY KEY, calls INTEGER NOT NULL, backfill INTEGER NOT NULL)');
   }
   get<T>(key:string,fallback:T):T {const r=this.sql.exec('SELECT value FROM settings WHERE key=?',key).toArray()[0];return r?JSON.parse(r.value):fallback;}
@@ -18,6 +19,10 @@ export class Ledger {
     this.sql.exec('INSERT OR REPLACE INTO jobs VALUES (?,?,?,?,?)',job.id,job.stage,job.receivedAt,job.due,data);
     this.sql.exec('INSERT INTO events(time,id,stage,data) VALUES (?,?,?,?)',job.updatedAt,job.id,job.stage,data);
   }
+  review(id:string):any {const r=this.sql.exec('SELECT data FROM reviews WHERE id=?',id).toArray()[0];return r?JSON.parse(r.data):undefined;}
+  saveReview(review:any){this.sql.exec('INSERT OR REPLACE INTO reviews VALUES (?,?)',review.id,JSON.stringify(review));}
+  page(after='',limit=100){return this.sql.exec('SELECT data FROM jobs WHERE id>? ORDER BY id LIMIT ?',after,limit).toArray().map(r=>JSON.parse(r.data) as Job);}
+  diagnostics(){return {issues:this.sql.exec("SELECT COALESCE(json_extract(data,'$.error'),'unknown') AS code,COUNT(*) AS count FROM jobs WHERE stage IN ('failed','held','retry') GROUP BY code").toArray(),oldestPending:this.sql.exec("SELECT MIN(json_extract(data,'$.updatedAt')) AS oldest FROM jobs WHERE stage IN ('pending','retry','planned','classifying')").toArray()[0]?.oldest??null};}
   counts(){return this.sql.exec('SELECT stage,COUNT(*) AS count FROM jobs GROUP BY stage').toArray();}
   jobs(limit=100){return this.sql.exec('SELECT data FROM jobs ORDER BY json_extract(data,\'$.updatedAt\') DESC LIMIT ?',limit).toArray().map(r=>JSON.parse(r.data) as Job);}
   audit(after:number){return this.sql.exec('SELECT * FROM events WHERE sequence>? ORDER BY sequence LIMIT 100',after).toArray();}
