@@ -38,7 +38,7 @@ test('rerun preview is billable once, writes nothing, then applies once with pre
 });
 test('manual changes, completed flags, stale configuration, old previews and pause protect reruns',async()=>{
  for(const patch of [{categories:['Manual']},{isRead:true},{flag:{flagStatus:'complete'}},{parentFolderId:'elsewhere'}]){const f=fixture();f.setState(patch);const p=await previewReview(f.context,request());assert.equal(p.state,'blocked');assert.equal(f.calls(),0);}
- for(const mutation of ['revision','expired','state','source']){const f=fixture(),p=await previewReview(f.context,request());if(mutation==='revision')f.context.revision='new';if(mutation==='expired')f.context.now=()=>now+3600001;if(mutation==='state')f.setState({categories:['Edited']});if(mutation==='source')f.ledger.save({...f.source,updatedAt:now+1});await assert.rejects(applyReview(f.context,p.id));assert.equal(f.effects.length,0);}
+ for(const mutation of ['revision','expired','state','source','etag']){const f=fixture(),p=await previewReview(f.context,request());if(mutation==='revision')f.context.revision='new';if(mutation==='expired')f.context.now=()=>now+3600001;if(mutation==='state')f.setState({categories:['Edited']});if(mutation==='etag')f.setState({'@odata.etag':'changed-during-review'});if(mutation==='source')f.ledger.save({...f.source,updatedAt:now+1});await assert.rejects(applyReview(f.context,p.id));assert.equal(f.effects.length,0);}
  const f=fixture();f.pause(false);await assert.rejects(previewReview(f.context,request()));assert.equal(f.calls(),0);
 });
 test('truncation/security/protected records cannot be rerun and changed model inputs never apply',async()=>{

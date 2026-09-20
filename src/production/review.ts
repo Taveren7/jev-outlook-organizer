@@ -5,7 +5,7 @@ import type {ProductionGraph} from './graph';
 import type {Ledger} from './store';
 export interface ReviewTicket {id:string;messageId:string;operation:'rerun'|'undo'|'retry';createdAt:number;expiresAt:number;revision:string;sourceHash:string;state:string;source:Job;before?:Metadata;proposal?:Job;error?:string;finishedAt?:number}
 export interface ReviewContext {ledger:Ledger;mail:ProductionGraph;layout:Layout;revision:string;policyVersion:string;securityHold:number;now:()=>number;classify:(message:any)=>Promise<any>;reserve:()=>boolean;paused:()=>boolean;save:(job:Job)=>Promise<void>}
-export function sameState(expected:Metadata,current:Metadata){if(expected.receivedDateTime!==current.receivedDateTime)throw Error('review_state_changed');try{assertLayoutState({...expected,'@odata.etag':current['@odata.etag']},current);}catch{throw Error('review_state_changed');}}
+export function sameState(expected:Metadata,current:Metadata,allowVersionDrift=true){if(expected.receivedDateTime!==current.receivedDateTime)throw Error('review_state_changed');try{assertLayoutState(allowVersionDrift?{...expected,'@odata.etag':current['@odata.etag']}:expected,current);}catch{throw Error('review_state_changed');}}
 export function rerunPlan(source:Job,current:Metadata,result:any,layout:Layout,now:number,securityHold=.7):Plan {
  if(source.stage!=='done'||!source.after||!source.plan||source.plan.destination||!source.classification||source.classification.security_risk.noul>=securityHold||source.limitations?.some(s=>s.includes('truncated')))throw Error('review_protected');
  sameState(source.after,current);
@@ -29,7 +29,7 @@ export async function previewReview(c:ReviewContext,input:any):Promise<ReviewTic
    if(!source.classification)throw Error('review_protected');rerunPlan(source,current,{classification:source.classification,limitations:source.limitations??[]},c.layout,c.now(),c.securityHold);
    if(!c.reserve())throw Error('review_budget_exhausted');
    const result=await c.classify(message);guard(c);
-   const fresh=await c.mail.metadata(input.id);sameState(current,fresh);
+   const fresh=await c.mail.metadata(input.id);sameState(current,fresh,false);
    const plan=rerunPlan(source,fresh,result,c.layout,c.now(),c.securityHold);
    proposal={...source,...result,plan,after:undefined,checkpoint:undefined,error:undefined,stage:'planned',policyVersion:c.policyVersion,updatedAt:c.now(),due:c.now(),reviewId:ticket.id,reviewOperation:'rerun'};
    if(!plan.destination){ticket.state='ineligible';ticket.proposal=proposal;c.ledger.saveReview(ticket);return ticket;}
@@ -53,7 +53,7 @@ export async function applyReview(c:ReviewContext,id:string):Promise<ReviewTicke
  if(['applied','queued','applying','recovery_required'].includes(ticket.state))return ticket;
  if(ticket.state!=='ready'||!ticket.proposal||!ticket.before||ticket.expiresAt<c.now()||ticket.revision!==c.revision)throw Error('review_expired_or_changed');
  const source=c.ledger.job(ticket.messageId);if(!source||await fingerprint(source)!==ticket.sourceHash)throw Error('review_source_changed');
- const current=await c.mail.metadata(ticket.messageId);sameState(ticket.before,current);if(!withinWindow(current.receivedDateTime,c.now()))throw Error('review_expired_or_changed');
+ const current=await c.mail.metadata(ticket.messageId);sameState(ticket.before,current,false);if(!withinWindow(current.receivedDateTime,c.now()))throw Error('review_expired_or_changed');
  guard(c);
  const proposal={...ticket.proposal,...(ticket.proposal.plan?{plan:{...ticket.proposal.plan,before:current}}:{}),updatedAt:c.now()};
  ticket.state='applying';c.ledger.saveReview(ticket);await c.save(proposal);
