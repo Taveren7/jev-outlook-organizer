@@ -1,0 +1,30 @@
+{
+  "name": "jev-outlook-organizer",
+  "main": "src/production.ts",
+  "compatibility_date": "2026-09-19",
+  "workers_dev": true,
+  "observability": {
+    "enabled": false
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "COORDINATOR",
+        "class_name": "MailboxCoordinator"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "MailboxCoordinator"
+      ]
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
+  }
+}

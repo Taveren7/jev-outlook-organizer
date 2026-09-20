@@ -1,0 +1,3 @@
+# Jev Outlook Organizer
+
+Read README.md and docs/setup.md. This repository is a public template; never add real credentials, tenant IDs, mailbox identifiers, mail content or private audit exports. Keep examples synthetic. Startup must remain paused. Setup must preview external changes before explicit application. Preserve read state, flags, unrelated categories, fresh-state checks, scope validation and uncertain-outcome reconciliation. Custom categories must flow through the model schema, validation, folders and display labels. Run npm test, npm run typecheck and npm run test:runtime after implementation changes. Do not deploy or alter a contributor mailbox while running tests.

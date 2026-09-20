@@ -1,0 +1,36 @@
+{
+  "name": "jev-outlook-organizer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "tsx scripts/setup.ts",
+    "config:check": "tsx scripts/setup.ts config",
+    "doctor": "tsx scripts/setup.ts doctor",
+    "mailbox:setup": "tsx scripts/setup.ts mailbox",
+    "deploy": "tsx scripts/setup.ts deploy",
+    "preview": "tsx scripts/setup.ts preview",
+    "service": "tsx scripts/service.ts",
+    "dev": "wrangler dev --ip 127.0.0.1",
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "test:runtime": "npm run build && tsx tests/runtime/service.ts && tsx tests/runtime/custom-profile.ts"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "0.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260920.1",
+    "@types/node": "^22.0.0",
+    "miniflare": "^5.20260918.0-alpha",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2",
+    "wrangler": "4.135.0"
+  },
+  "license": "MIT",
+  "description": "Self-hosted Outlook organization with TypeSafe Jev, custom categories and scoped Microsoft 365 access"
+}
