@@ -21,6 +21,12 @@ The description becomes a Jev choice, the key is validated in its returned proba
 
 Change the display names and colors under `attention`, `actions` and `review`, keeping their keys and meanings. All display names must be unique across groups, ignoring case. Folder names cannot contain `/` or `\`. Colors use Microsoft's `none` or `preset0` through `preset24` values. Existing mailbox category colors are preserved during setup; the preview shows the existing color.
 
+## Personal action indicator
+
+`actionIndicator` defaults to `{"name":"Needs Me","color":"preset0","threshold":0.9}`. Change the name, color or threshold during onboarding. The label appears when `needs_owner` reaches the threshold, independently of Now/Soon urgency and Type confidence. It does not change native Outlook follow-up flags or bypass security/truncation filing holds. Completed messages are excluded before tagging. Later completion does not automatically clear an already-applied label; remove it manually when appropriate.
+
+This field is optional: profiles from v0.1.1 that omit it retain their exact profile identity and have no action indicator. Upgrading code while keeping that JSON unchanged does not enable the label. Adding or changing it on an active installation is a profile change; follow the migration guidance below. No existing messages are automatically replayed.
+
 ## Processing settings
 
 | Setting | Default | Behavior |

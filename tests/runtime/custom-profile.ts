@@ -6,7 +6,7 @@ import {CONFIG} from '../../src/config';import {sample} from '../../fixtures/exa
 const directory=mkdtempSync(join(tmpdir(),'jev-custom-profile-'));let mf:Miniflare|undefined;
 try{
  cpSync('src',join(directory,'src'),{recursive:true});symlinkSync(resolve('node_modules'),join(directory,'node_modules'),process.platform==='win32'?'junction':'dir');
- const config=structuredClone(CONFIG);config.ownerContext='Project coordinator';config.timeZone='Asia/Tokyo';config.types={projects:{description:'Project deliveries and milestones.',folder:'My Projects',color:'preset4',routine:false},receipts:{description:'Purchase receipts.',folder:'Purchase Records',color:'preset7',routine:true}};config.attention.now.name='Urgent';config.actions.reply.name='Respond';config.review.needsReview.name='Check This';
+ const config=structuredClone(CONFIG);config.ownerContext='Project coordinator';config.actionIndicator={name:'My Follow-up',color:'preset2',threshold:.95};config.timeZone='Asia/Tokyo';config.types={projects:{description:'Project deliveries and milestones.',folder:'My Projects',color:'preset4',routine:false},receipts:{description:'Purchase receipts.',folder:'Purchase Records',color:'preset7',routine:true}};config.attention.now.name='Urgent';config.actions.reply.name='Respond';config.review.needsReview.name='Check This';
  writeFileSync(join(directory,'organizer.config.json'),JSON.stringify(config));
  const wrangler=JSON.parse(readFileSync('wrangler.jsonc','utf8'));writeFileSync(join(directory,'wrangler.jsonc'),JSON.stringify(wrangler));
  const bundle=()=>{const result=spawnSync(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),'deploy','--dry-run','--outdir','dist'],{cwd:directory,encoding:'utf8'});assert.equal(result.status,0,result.stderr);};
@@ -31,7 +31,7 @@ try{
  assert.equal((await admin('status')).paused,true);await admin('scan',{});await admin('resume',{mode:'type-folders',dailyLimit:5});
  const started=Date.now();let status:any;do{await new Promise(r=>setTimeout(r,50));status=await admin('status');}while((status.busy||!status.jobs.some((j:any)=>j.stage==='done'))&&Date.now()-started<10000);
  await admin('pause',{});assert.ok(status.jobs.some((j:any)=>j.stage==='done'),JSON.stringify(status));
- assert.equal(modelCalls,1);assert.equal(message.parentFolderId,'projects-folder');assert.deepEqual(message.categories,['Personal','Urgent','Respond','Check This']);assert.equal(message.isRead,false);assert.deepEqual(message.flag,{flagStatus:'notFlagged'});assert.deepEqual(effects,['categories','move']);
+ assert.equal(modelCalls,1);assert.equal(message.parentFolderId,'projects-folder');assert.deepEqual(message.categories,['Personal','Urgent','Respond','Check This','My Follow-up']);assert.equal(message.isRead,false);assert.deepEqual(message.flag,{flagStatus:'notFlagged'});assert.deepEqual(effects,['categories','move']);
  // Replacing the profile on the existing durable ledger must fail closed before any write.
  config.attention.now.name='Different Urgency';writeFileSync(join(directory,'organizer.config.json'),JSON.stringify(config));await mf.dispose();mf=undefined;
  bundle();

@@ -136,5 +136,10 @@
       "name": "Security Review",
       "color": "preset8"
     }
+  },
+  "actionIndicator": {
+    "name": "Needs Me",
+    "color": "preset0",
+    "threshold": 0.9
   }
 }

@@ -3,7 +3,7 @@ import {TYPE_NAMES} from './outlook-layout';
 import type {Layout,Folder} from './production/core';
 export interface SetupGraph {request(path:string,method?:string,body?:unknown):Promise<any>}
 export interface MailboxPlan {version:1;createdAt:number;account:string;profile:string;inbox:Folder;folders:Array<{type:string;name:string;existingId:string|null}>;categories:Array<{name:string;color:string;existingId:string|null;existingColor:string|null}>}
-export const categoryDefinitions=()=>[...Object.values(CONFIG.types).map(t=>({name:t.folder,color:t.color})),...Object.values(CONFIG.attention),...Object.values(CONFIG.actions),...Object.values(CONFIG.review)];
+export const categoryDefinitions=()=>[...Object.values(CONFIG.types).map(t=>({name:t.folder,color:t.color})),...Object.values(CONFIG.attention),...Object.values(CONFIG.actions),...Object.values(CONFIG.review),...(CONFIG.actionIndicator?[{name:CONFIG.actionIndicator.name,color:CONFIG.actionIndicator.color}]:[])];
 export async function listAll(mail:SetupGraph,path:string,account:string){
  const rows:any[]=[];let current:string|undefined=path;const seen=new Set<string>();
  for(let page=0;current&&page<100;page++){

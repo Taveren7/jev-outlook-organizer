@@ -12,7 +12,7 @@ function fixture(){
 }
 test('setup previews without writes, provisions exact folders/categories, and reruns without duplicates',async()=>{
  const f=fixture(),plan=await planMailbox(f.mail,'mailbox');assert.equal(f.writes.length,0);
- const layout=await applyMailboxPlan(f.mail,'mailbox',plan);assert.equal(Object.keys(layout.folders).length,Object.keys(CONFIG.types).length);assert.equal(f.categories.length,categoryDefinitions().length);assert.ok(f.writes.every(path=>!path.includes('/messages')));
+ const layout=await applyMailboxPlan(f.mail,'mailbox',plan);assert.equal(Object.keys(layout.folders).length,Object.keys(CONFIG.types).length);assert.equal(f.categories.length,categoryDefinitions().length);assert.ok(f.categories.some(c=>c.displayName==='Needs Me'&&c.color==='preset0'));assert.ok(f.writes.every(path=>!path.includes('/messages')));
  const writes=f.writes.length;await applyMailboxPlan(f.mail,'mailbox',await planMailbox(f.mail,'mailbox'));assert.equal(f.writes.length,writes);
  const searches=await setupSearches(f.mail,layout);assert.equal(searches.length,3);assert.equal(f.writes.length,writes);
  await setupSearches(f.mail,layout,true);assert.equal(f.searches.length,3);assert.ok(f.searches.every(s=>s.sourceFolderIds.length===Object.keys(CONFIG.types).length+1&&s.includeNestedFolders===false&&s.filterQuery.includes("flag/flagStatus ne 'complete'")));

@@ -10,3 +10,10 @@ test('invalid or colliding configuration fails before setup or deployment',()=>{
  const cases=[(c:any)=>c.routing.fileTruncatedMessage=true,(c:any)=>c.types.other.folder=c.attention.now.name,(c:any)=>c.types.other.folder='Inbox',(c:any)=>c.types.other.folder='Nested/Folder',(c:any)=>c.types.other.color='red',(c:any)=>c.timeZone='Unknown/Zone',(c:any)=>c.dailyLimit=0,(c:any)=>c.routing.securityHold=NaN,(c:any)=>c.types.other.description='',(c:any)=>c.actions.reply=undefined,(c:any)=>c.types={one:c.types.other},(c:any)=>c.types.constructor=c.types.other];
  for(const mutate of cases){const c=structuredClone(CONFIG);mutate(c);assert.throws(()=>validateConfig(c));}
 });
+
+test('optional action indicator validates names, colors and probability without changing legacy profiles',()=>{
+ const legacy=structuredClone(CONFIG);delete legacy.actionIndicator;const fingerprint=JSON.stringify(legacy);
+ assert.equal(JSON.stringify(validateConfig(legacy)),fingerprint);assert.equal(legacy.actionIndicator,undefined);
+ for(const indicator of [null,{}, {name:'Needs Me',color:'preset0',threshold:NaN},{name:'Needs Me',color:'preset0',threshold:1.01},{name:'Needs Me',color:'red',threshold:.9},{name:CONFIG.actions.reply.name,color:'preset0',threshold:.9}])assert.throws(()=>validateConfig({...CONFIG,actionIndicator:indicator}));
+ const custom={...CONFIG,actionIndicator:{name:'My Action',color:'preset2',threshold:.95}};assert.equal(validateConfig(custom).actionIndicator?.threshold,.95);
+});

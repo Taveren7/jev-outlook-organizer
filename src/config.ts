@@ -3,6 +3,7 @@ export interface Label {name:string;color:string}
 export interface OrganizerConfig {
  version:1;ownerContext:string;organizationContext:string;timeZone:string;model:string;
  lookbackDays:number;dailyLimit:number;maxBodyCharacters:number;
+ actionIndicator?:Label & {threshold:number};
  routing:{choiceConfidence:number;choiceProbability:number;securityHold:number;fileTruncatedMessages:boolean};
  types:Record<string,{description:string;folder:string;color:string;routine:boolean}>;
  attention:Record<'now'|'soon'|'informational'|'none',Label>;
@@ -17,7 +18,7 @@ export function validateConfig(value:unknown):OrganizerConfig {
  const color=(v:unknown)=>typeof v==='string'&&/^(none|preset([0-9]|1[0-9]|2[0-4]))$/.test(v);
  const exactKeys=(v:object,keys:string[])=>Object.keys(v).sort().join()===keys.sort().join();
  if(!record(c)||c.version!==1||!text(c.ownerContext,2000)||!text(c.organizationContext,4000)||!text(c.model,100)||!text(c.timeZone,100))fail();
- if(!exactKeys(c,['version','ownerContext','organizationContext','timeZone','model','lookbackDays','dailyLimit','maxBodyCharacters','routing','types','attention','actions','review']))fail();
+ if(!exactKeys(c,['version','ownerContext','organizationContext','timeZone','model','lookbackDays','dailyLimit','maxBodyCharacters','routing','types','attention','actions','review',...(Object.hasOwn(c,'actionIndicator')?['actionIndicator']:[])]))fail();
  try{new Intl.DateTimeFormat('en',{timeZone:c.timeZone});}catch{fail();}
  for(const [v,min,max] of [[c.lookbackDays,1,30],[c.dailyLimit,1,250],[c.maxBodyCharacters,1000,50000]])if(!Number.isInteger(v)||v!<min!||v!>max!)fail();
  if(!record(c.routing)||!exactKeys(c.routing,['choiceConfidence','choiceProbability','securityHold','fileTruncatedMessages'])||typeof c.routing.fileTruncatedMessages!=='boolean')fail();
@@ -27,6 +28,7 @@ export function validateConfig(value:unknown):OrganizerConfig {
  for(const [group,keys] of [[c.attention,['now','soon','informational','none']],[c.actions,['reply','review_investigate','approve_decide','order_buy','delegate','reference','archive','other']],[c.review,['needsReview','securityReview']]] as const){
   if(!record(group)||Object.keys(group).sort().join()!==[...keys].sort().join())fail();for(const l of Object.values(group))checkLabel(l);
  }
+ if(Object.hasOwn(c,'actionIndicator')){const v=c.actionIndicator!;if(!record(v)||!exactKeys(v,['name','color','threshold'])||typeof v.threshold!=='number'||!Number.isFinite(v.threshold)||v.threshold<0||v.threshold>1)fail();checkLabel({name:v.name,color:v.color});}
  if(!record(c.types)||Object.keys(c.types).length<2||Object.keys(c.types).length>30)fail();
  for(const [key,v] of Object.entries(c.types)){
   if(!/^[a-z][a-z0-9_]{0,47}$/.test(key)||['constructor','prototype','__proto__'].includes(key)||!record(v)||!exactKeys(v,['description','folder','color','routine'])||!text(v.description,2000)||!text(v.folder,60)||/[\\/]/.test(v.folder)||['inbox','old folders','search folders'].includes(v.folder.toLowerCase())||typeof v.routine!=='boolean')fail();

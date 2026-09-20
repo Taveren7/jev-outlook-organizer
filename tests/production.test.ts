@@ -32,7 +32,7 @@ test('type-folder mode routes all ten clear Types independently of uncertain tas
 test('clear urgent requests and flags remain visible in their Type folder',()=>{
   const flagged={...before,flag:{flagStatus:'flagged',dueDateTime:{dateTime:'2026-09-21T00:00:00',timeZone:'UTC'}}};
   const plan=routingPlan(flagged,sample('now','customer_sales','reply',0.98),['Attachments not analyzed'],layout,'type-folders',now);
-  assert.equal(plan.destination?.id,'customer_sales');assert.deepEqual(plan.finalCategories,['Personal','Now','Reply','Needs Review']);assert.deepEqual(plan.before.flag,flagged.flag);
+  assert.equal(plan.destination?.id,'customer_sales');assert.deepEqual(plan.finalCategories,['Personal','Now','Reply','Needs Review','Needs Me']);assert.deepEqual(plan.before.flag,flagged.flag);
 });
 test('unclear Type, high risk and truncated input still block Type filing',()=>{
   for(const change of ['confidence','probability','security','truncated']){
@@ -104,4 +104,16 @@ test('one-time catch-up bypasses daily pacing without spending capacity reserved
   assert.equal(reopened.budget(now).regularCalls,1);assert.equal(reopened.budget(now).catchupCalls,2);
   assert.equal(reopened.reserve(now+86400_000,false,1,new Date(now+86400_000).toISOString()),true);
   reopened.save({...job,stage:'done'});reopened.finishCatchup(now+1000);assert.ok(reopened.get<any>('catchup',null).completedAt);db.close();
+});
+
+test('owner action indicator has an inclusive threshold independent of urgency and keeps filing holds',()=>{
+ for(const score of [.899,.9,1]){
+  const c=sample('informational','customer_sales','reference',score);
+  const plan=routingPlan(before,c,[],layout,'type-folders',now);
+  assert.equal(plan.finalCategories.includes('Needs Me'),score>=.9);
+  assert.deepEqual(plan.before,before);
+ }
+ const held=routingPlan(before,sample('now','customer_sales','reply',.99,.8),['body truncated'],layout,'type-folders',now);
+ assert.equal(held.destination,null);assert.ok(held.categories.includes('Needs Me'));assert.ok(held.categories.includes('Security Review'));
+ for(const state of [{...before,flag:{flagStatus:'complete'}},{...before,categories:['Needs Me']}])assert.throws(()=>routingPlan(state,sample('now','customer_sales','reply',1),[],layout,'type-folders',now),/state_protected/);
 });

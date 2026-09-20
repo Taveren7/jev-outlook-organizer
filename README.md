@@ -3,7 +3,7 @@
 A self-hosted Microsoft 365 email organizer. TypeSafe Jev classifies messages; a Cloudflare Worker applies your folder and category rules. Supply your own Microsoft, Jev and Cloudflare accounts.
 
 - **Your categories:** add or remove Types, describe what belongs in each, and choose folder names and category colors in one JSON file.
-- **Readable Outlook:** Type determines the folder; Attention and Action remain visible as short labels. No redundant Type badge on newly filed messages.
+- **Readable Outlook:** Type determines the folder; Attention and Action remain visible as short labels. No redundant Type badge on newly filed messages. A red **Needs Me** label highlights a high owner-action score (90% by default).
 - **Preserved state:** sorting and tagging do not mark mail read, change flags, send replies or complete tasks.
 - **Review first:** setup previews changes, deployment starts paused, and a single-message preview makes no mailbox changes.
 - **Background operation:** five-minute Inbox discovery, a durable queue, bounded retries, provider cooldowns and an authenticated pause control.
@@ -59,7 +59,7 @@ See the full setup guide before running these commands. `preview --latest` sends
 | Attention | Now, soon, informational, or none |
 | Type | Your configurable business/workflow categories |
 | Action | Reply, review, approve, buy, delegate, reference, archive, or other |
-| Needs owner | Probability that the mailbox owner needs to act |
+| Needs owner | Probability that the mailbox owner needs to act; drives the configurable Needs Me label |
 | Security risk | Probability that security review is warranted |
 
 Only Type choices are freely extensible; Attention/Action meanings stay stable while their display labels and colors are customizable. The bundled categories are examples, not a required taxonomy. [Customize your configuration](docs/configuration.md).

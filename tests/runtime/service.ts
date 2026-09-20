@@ -50,7 +50,7 @@ try{
  const task={...message,id:'active-task','@odata.etag':'v1',categories:['Personal'],parentFolderId:'inbox',flag:{flagStatus:'flagged'},receivedDateTime:new Date(Date.now()-1).toISOString()};additional.push(task);
  modelAnswer=sample('now','customer_sales','reply',0.98);modelAnswer={...modelAnswer,action:{...modelAnswer.action,confidence:0.5}};
  await request('scan',{});await request('resume',{mode:'type-folders',dailyLimit:100});await until(s=>s.jobs.some((j:any)=>j.stage==='done'&&j.count===4));await request('pause',{});
- assert.equal(task.parentFolderId,'customer_sales');assert.deepEqual(task.categories,['Personal','Now','Review','Needs Review']);assert.deepEqual(task.flag,{flagStatus:'flagged'});assert.equal(task.isRead,false);
+ assert.equal(task.parentFolderId,'customer_sales');assert.deepEqual(task.categories,['Personal','Now','Review','Needs Review','Needs Me']);assert.deepEqual(task.flag,{flagStatus:'flagged'});assert.equal(task.isRead,false);
  // A model rate limit must also stop *other* queued messages and survive an explicit run request.
  additional.push(...['throttle-one','throttle-two'].map(id=>({...message,id,'@odata.etag':'v1',categories:[],parentFolderId:'inbox',receivedDateTime:new Date(Date.now()-1).toISOString()})));
  await request('scan',{});rejectModel=true;await request('resume',{mode:'conservative',dailyLimit:100});

@@ -22,7 +22,7 @@ export interface MailAdapter {
   move(id: string, sourceId: string, destinationId: string): Promise<void>;
 }
 export const POLICY_VERSION = 'public-v1';
-const owned = new Set<string>([...Object.values(TYPE_NAMES), ...Object.values(ACTION_NAMES), ...Object.values(ATTENTION_LABELS).map(v=>v.name),REVIEW_LABELS.needsReview,REVIEW_LABELS.securityReview]);
+const owned = new Set<string>([...Object.values(TYPE_NAMES), ...Object.values(ACTION_NAMES), ...Object.values(ATTENTION_LABELS).map(v=>v.name),REVIEW_LABELS.needsReview,REVIEW_LABELS.securityReview,...(CONFIG.actionIndicator?[CONFIG.actionIndicator.name]:[])]);
 export const managed = (categories: string[]) => categories.some(c => owned.has(c) || c.startsWith('JEV-'));
 export const equalCategories = (a:string[],b:string[])=>JSON.stringify([...a].sort())===JSON.stringify([...b].sort());
 const sameFlag=(a:Metadata,b:Metadata)=>JSON.stringify(a.flag)===JSON.stringify(b.flag);
@@ -48,6 +48,7 @@ export function routingPlan(before:Metadata,input:unknown,limitations:string[],l
     const actionable=typeMode&&c.action.confidence>=0.8&&c.action.probabilities[c.action.choice]>=0.8&&!['reference','archive','other'].includes(c.action.choice);
     categories=[...before.categories,...(typeMode&&clearType?[TYPE_NAMES[c.type.choice]!]:[]),urgent?ATTENTION_LABELS.now.name:ATTENTION_LABELS.soon.name,actionable?ACTION_NAMES[c.action.choice]:ACTION_NAMES.review_investigate,REVIEW_LABELS.needsReview,...(proposal.disposition==='security_review'?[REVIEW_LABELS.securityReview]:[])];
   }else categories=[...before.categories,TYPE_NAMES[c.type.choice]!,ATTENTION_LABELS[c.attention.choice].name,ACTION_NAMES[c.action.choice]];
+  if(CONFIG.actionIndicator && c.needs_owner.noul>=CONFIG.actionIndicator.threshold)categories.push(CONFIG.actionIndicator.name);
   categories=[...new Set(categories)];
   // Start with a deliberately small routine allowlist and stronger confidence than labeling.
   const routine=Object.keys(CONFIG.types).filter(key=>CONFIG.types[key]!.routine);
