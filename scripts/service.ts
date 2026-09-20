@@ -1,4 +1,5 @@
 import {CONFIG} from '../src/config';
+import {serviceUrl} from '../src/deployment';
 import {existsSync,readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {parseArgs} from 'node:util';
 
@@ -7,8 +8,7 @@ try{
   const {values,positionals}=parseArgs({options:{limit:{type:'string'},mode:{type:'string'},file:{type:'string'},id:{type:'string'},after:{type:'string'}},allowPositionals:true});
   const command=positionals[0]??'status';
   if(!['status','pause','resume','scan','run','jobs','seed','promote','audit','catchup'].includes(command))throw Error('invalid_command');
-  const base=new URL(process.env.JEV_SERVICE_URL!);
-  if(base.protocol!=='https:'||!base.hostname.endsWith('.workers.dev')||base.username||base.password||base.search||base.hash)throw Error('invalid_url');
+  const base=serviceUrl(process.env.JEV_SERVICE_URL!);
   const token=process.env.ADMIN_TOKEN;if(!token||token.length<32)throw Error('missing_token');
   const method=['status','jobs','audit'].includes(command)?'GET':'POST';
   const body=command==='resume'?{dailyLimit:Number(values.limit??CONFIG.dailyLimit),mode:values.mode??'observe'}:command==='seed'?JSON.parse(readFileSync(values.file!,'utf8')):command==='promote'?{id:values.id,mode:values.mode??'type-folders'}:{};

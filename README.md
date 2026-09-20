@@ -36,6 +36,8 @@ The setup command creates a local `.env` with a random administration token, pre
 
    ```sh
    npx wrangler login
+   npx wrangler whoami
+   # Copy the account ID into CLOUDFLARE_ACCOUNT_ID in .env.
    npm run deploy
    npm run deploy -- --apply
    ```

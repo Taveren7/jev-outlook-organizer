@@ -3,6 +3,7 @@ import {randomBytes} from 'node:crypto';
 import {resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {CONFIG,PROFILE_ID} from '../src/config';
+import {discoverTarget,verifyPaused,verifyDeploymentPlan,serviceUrl,type DeploymentPlan} from '../src/deployment';
 import {ProductionGraph} from '../src/production/graph';
 import {validateLayout} from '../src/production/core';
 import {planMailbox,applyMailboxPlan,setupSearches,type MailboxPlan} from '../src/onboarding';
@@ -15,8 +16,8 @@ const privateWrite=(path:string,value:unknown)=>{mkdirSync('private',{recursive:
 function env(){if(existsSync('.env'))process.loadEnvFile('.env');return process.env;}
 function graphConfig(){const e=env();for(const key of ['MS_TENANT_ID','MS_CLIENT_ID','MS_MAILBOX_ID'])if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(e[key]??''))throw Error('Microsoft IDs must be GUIDs; complete .env first.');if(!e.MS_CLIENT_SECRET)throw Error('Microsoft client secret value is missing.');return e as unknown as GraphConfig;}
 function localLayout(){const bundle=JSON.parse(readFileSync('private/mailbox-layout.json','utf8'));if(bundle.profile!==PROFILE_ID)throw Error('Configuration changed; preview mailbox setup again.');return validateLayout(JSON.stringify(bundle.layout),graphConfig().MS_MAILBOX_ID);}
-async function serviceStatus(){const e=env();if(!e.JEV_SERVICE_URL)return null;const u=new URL(e.JEV_SERVICE_URL);if(u.protocol!=='https:'||!u.hostname.endsWith('.workers.dev')||u.username||u.password||u.search||u.hash)throw Error('Invalid service URL.');const r=await fetch(new URL('/admin/status',u),{redirect:'error',headers:{Authorization:'Bearer '+e.ADMIN_TOKEN},signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('Could not verify the existing service status.');return r.json() as Promise<any>;}
-function wrangler(args:string[],input?:string){const result=spawnSync(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),...args],{encoding:'utf8',input,env:process.env});if(result.status!==0)throw Error('Wrangler failed. Check login/account and retry; private provider output withheld.');if(input===undefined)process.stdout.write(result.stdout);}
+async function serviceStatus(){const e=env();if(!e.JEV_SERVICE_URL)return null;const u=serviceUrl(e.JEV_SERVICE_URL);const r=await fetch(new URL('/admin/status',u),{redirect:'error',headers:{Authorization:'Bearer '+e.ADMIN_TOKEN},signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('Could not verify the existing service status.');return r.json() as Promise<any>;}
+function wrangler(args:string[],input?:string,quiet=false){const result=spawnSync(process.execPath,[resolve('node_modules/wrangler/bin/wrangler.js'),...args],{encoding:'utf8',input,env:process.env});if(result.status!==0)throw Error('Wrangler failed. Check login/account and retry; private provider output withheld.');if(input===undefined&&!quiet)process.stdout.write(result.stdout);return result.stdout;}
 try{
  if(command==='init'){
   if(!existsSync('.env')){writeFileSync('.env',readFileSync('.env.example','utf8').replace('ADMIN_TOKEN=','ADMIN_TOKEN='+randomBytes(32).toString('hex')),{mode:0o600});chmodSync('.env',0o600);console.log('Created private .env with a random admin token.');}else console.log('.env already exists; preserved.');
@@ -36,18 +37,27 @@ try{
  }else if(command==='deploy'){
   const e=env(),layout=localLayout();for(const k of ['ADMIN_TOKEN','TYPESAFE_API_KEY','MS_CLIENT_SECRET'])if(!e[k])throw Error('Complete .env first.');if(e.ADMIN_TOKEN!.length<32)throw Error('Admin token must be at least 32 characters.');
   if(!/^[a-z][a-z0-9-]{2,62}$/.test(e.WORKER_NAME??''))throw Error('Set your own valid WORKER_NAME.');
-  const status=await serviceStatus();if(status&&(!status.paused||status.busy))throw Error('Pause the existing service before deployment.');
-  if(!apply){console.log(JSON.stringify({previewOnly:true,workerName:e.WORKER_NAME,categories:Object.keys(layout.folders).length,startup:'paused',secrets:['MS_TENANT_ID','MS_CLIENT_ID','MS_CLIENT_SECRET','MS_MAILBOX_ID','TYPESAFE_API_KEY','ADMIN_TOKEN','MAILBOX_LAYOUT'],next:'npm run deploy -- --apply'},null,2));}
+  // Capture Wrangler's credential in memory only; never print it or write it to a plan.
+  const credential=JSON.parse(wrangler(['auth','token','--json'],undefined,true));
+  if(!['oauth','api_token'].includes(credential.type)||typeof credential.token!=='string')throw Error('Deployment check requires Wrangler login or a Cloudflare API token.');
+  const target=await discoverTarget(e.CLOUDFLARE_ACCOUNT_ID??'',e.WORKER_NAME!,credential.token);
+  await verifyPaused(target,e.JEV_SERVICE_URL,e.ADMIN_TOKEN!);
+  const plan:DeploymentPlan={target,profile:PROFILE_ID,layout:JSON.stringify(layout),createdAt:Date.now()};
+  if(!apply){privateWrite('private/deployment-plan.json',plan);console.log(JSON.stringify({previewOnly:true,workerName:e.WORKER_NAME,serviceUrl:target.serviceUrl,operation:target.exists?'update':'create',categories:Object.keys(layout.folders).length,startup:'paused',secrets:['MS_TENANT_ID','MS_CLIENT_ID','MS_CLIENT_SECRET','MS_MAILBOX_ID','TYPESAFE_API_KEY','ADMIN_TOKEN','MAILBOX_LAYOUT'],next:'npm run deploy -- --apply'},null,2));}
   else{
-   const wranglerConfig=JSON.parse(readFileSync('wrangler.jsonc','utf8'));wranglerConfig.name=e.WORKER_NAME;writeFileSync('wrangler.local.jsonc',JSON.stringify(wranglerConfig,null,2)+'\n',{mode:0o600});
+   if(!existsSync('private/deployment-plan.json'))throw Error('Deployment preview is missing; run npm run deploy first.');
+   verifyDeploymentPlan(JSON.parse(readFileSync('private/deployment-plan.json','utf8')),target,PROFILE_ID,JSON.stringify(layout));
+   const wranglerConfig=JSON.parse(readFileSync('wrangler.jsonc','utf8'));wranglerConfig.name=e.WORKER_NAME;wranglerConfig.account_id=target.accountId;writeFileSync('wrangler.local.jsonc',JSON.stringify(wranglerConfig,null,2)+'\n',{mode:0o600});
    // A new service starts paused. Existing services were verified paused above.
    wrangler(['deploy','-c','wrangler.local.jsonc']);
    const secrets=Object.fromEntries(['MS_TENANT_ID','MS_CLIENT_ID','MS_CLIENT_SECRET','MS_MAILBOX_ID','TYPESAFE_API_KEY','ADMIN_TOKEN'].map(k=>[k,e[k]]));secrets.MAILBOX_LAYOUT=JSON.stringify(layout);
    wrangler(['secret','bulk','-c','wrangler.local.jsonc'],JSON.stringify(secrets));
+   await verifyPaused({...target,exists:true},target.serviceUrl,e.ADMIN_TOKEN!);
+   console.log('Paused status verified at '+target.serviceUrl);
    console.log('Secrets uploaded through stdin. Set JEV_SERVICE_URL in .env to the printed workers.dev URL, then run npm run service -- status. The new service remains paused.');
   }
  }else if(command==='preview'){
   if(!args.includes('--latest'))throw Error('Use --latest to explicitly send the latest Inbox message to Jev for review.');
   const mail=new ProductionGraph(graphConfig()),layout=localLayout();const r=await mail.request('/mailFolders/inbox/messages?$top=1&$orderby=receivedDateTime desc&$select=id');const id=r.value?.[0]?.id;if(!id){console.log('Inbox is empty.');}else{const {metadata,message}=await mail.content(id),e=env();if(!e.TYPESAFE_API_KEY)throw Error('Jev key missing.');const result=await classifyMessage(message,e.TYPESAFE_API_KEY);const plan=routingPlan(metadata,result.classification,result.limitations,layout,'type-folders',Date.now());privateWrite('private/latest-preview.json',{id,...result,plan});console.log(JSON.stringify({mailboxWrites:0,classification:result.classification,limitations:result.limitations,destination:plan.destination?.displayName??'Keep in Inbox',labels:plan.finalCategories},null,2));}
  }else throw Error('Unknown setup command.');
-}catch(error){const local=error instanceof Error&&/^(Microsoft IDs|Microsoft client secret|Configuration changed|Invalid service URL|Could not verify|Wrangler failed|The negative|Out-of-scope|Negative scope|Jev API|Jev key|Pause |Complete |Admin token|Set your|Use --latest|Unknown setup)/.test(error.message);console.error(local?(error as Error).message:'Setup could not complete. Check configuration/permissions and docs/setup.md; private provider details withheld.');process.exitCode=1;}
+}catch(error){const local=error instanceof Error&&/^(Microsoft IDs|Microsoft client secret|Configuration changed|Invalid service URL|Could not verify|Wrangler failed|Deployment |The negative|Out-of-scope|Negative scope|Jev API|Jev key|Pause |Complete |Admin token|Set your|Use --latest|Unknown setup)/.test(error.message);console.error(local?(error as Error).message:'Setup could not complete. Check configuration/permissions and docs/setup.md; private provider details withheld.');process.exitCode=1;}

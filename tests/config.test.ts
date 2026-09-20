@@ -7,6 +7,6 @@ test('custom Type keys, descriptions, folders and labels validate without source
  const answer={...sample('soon','other','reply',.9),type:{type:'choice',choice:'projects',confidence:.95,probabilities:{projects:.95,receipts:.05}}};assert.equal(parseClassification(answer,{projects:'Project work',receipts:'Receipts'}).type.choice,'projects');assert.throws(()=>parseClassification(answer));
 });
 test('invalid or colliding configuration fails before setup or deployment',()=>{
- const cases=[(c:any)=>c.types.other.folder=c.attention.now.name,(c:any)=>c.types.other.folder='Inbox',(c:any)=>c.types.other.folder='Nested/Folder',(c:any)=>c.types.other.color='red',(c:any)=>c.timeZone='Unknown/Zone',(c:any)=>c.dailyLimit=0,(c:any)=>c.routing.securityHold=NaN,(c:any)=>c.types.other.description='',(c:any)=>c.actions.reply=undefined,(c:any)=>c.types={one:c.types.other},(c:any)=>c.types.constructor=c.types.other];
+ const cases=[(c:any)=>c.routing.fileTruncatedMessage=true,(c:any)=>c.types.other.folder=c.attention.now.name,(c:any)=>c.types.other.folder='Inbox',(c:any)=>c.types.other.folder='Nested/Folder',(c:any)=>c.types.other.color='red',(c:any)=>c.timeZone='Unknown/Zone',(c:any)=>c.dailyLimit=0,(c:any)=>c.routing.securityHold=NaN,(c:any)=>c.types.other.description='',(c:any)=>c.actions.reply=undefined,(c:any)=>c.types={one:c.types.other},(c:any)=>c.types.constructor=c.types.other];
  for(const mutate of cases){const c=structuredClone(CONFIG);mutate(c);assert.throws(()=>validateConfig(c));}
 });

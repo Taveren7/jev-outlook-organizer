@@ -63,6 +63,9 @@ Messages older than the configured window are not newly classified/moved; existi
 | Microsoft authentication fails | Tenant/client IDs and secret **Value**, secret expiry, correct organization. |
 | Graph 403 reading mail | Single-mailbox Mail.ReadWrite assignment, enterprise application Object ID, propagation, mailbox ID. |
 | Category setup gets 403 | Scoped MailboxSettings.ReadWrite assignment and propagation. Mail.ReadWrite alone is insufficient. |
+| Deployment cannot verify Cloudflare metadata | Set the account ID from `npx wrangler whoami`, refresh Wrangler login, and confirm that the account has a workers.dev subdomain. No deployment proceeds on a failed discovery. |
+| Deployment target already exists or URL differs | Use the intended account and Worker name, set its exact `JEV_SERVICE_URL`, pause it and create a new deployment preview. |
+| Deployment preview is stale | Run `npm run deploy` again, review the target, then apply within one hour. |
 | Setup reports ambiguous names | Resolve duplicate/case-conflicting folders/categories, then create a fresh preview. |
 | Labels saved but hard to see in Outlook | Confirm mailbox master categories were created and the client synchronized. |
 | Search Folders missing | The helper targets classic Windows Outlook; newer/web clients use a different parent. Definitions can also expire. |

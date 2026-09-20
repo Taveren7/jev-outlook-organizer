@@ -98,7 +98,7 @@ These search Inbox and all configured Type folders, exclude completed flags and 
 
 ## 6. Deploy to your Cloudflare account, paused
 
-Sign in to Cloudflare and choose a unique `WORKER_NAME` in `.env`. If your login has several accounts, set `CLOUDFLARE_ACCOUNT_ID` too. Use an account authorized to process this mailbox's data.
+Sign in to Cloudflare and choose a unique `WORKER_NAME` in `.env`. Run `npx wrangler whoami` and copy the chosen account ID into `CLOUDFLARE_ACCOUNT_ID`. This is required even with one account, so the deployment target is explicit. Use an account authorized to process this mailbox's data.
 
 ```sh
 npx wrangler login
@@ -106,7 +106,7 @@ npm run deploy
 npm run deploy -- --apply
 ```
 
-The first deployment command previews the Worker name, mapping and secret names; it never prints secret values. Application creates an ignored `wrangler.local.jsonc`, deploys the Worker, and passes secrets to Wrangler through stdin. The fresh durable coordinator starts paused. Do not use another application's Worker name.
+The first deployment command reads Cloudflare metadata using your Wrangler login, verifies the exact account and Worker name, and saves a private preview valid for one hour. It previews the target URL, mapping and secret names; it never prints secret values. An existing Worker requires its matching `JEV_SERVICE_URL`, a valid admin token and a paused, idle public organizer. A name collision cannot be treated as a fresh deployment. Application creates an ignored `wrangler.local.jsonc`, deploys the Worker, and passes secrets to Wrangler through stdin. The fresh durable coordinator starts paused, and setup verifies paused status after uploading secrets. If verification fails, inspect status before proceeding; the deployment may already exist. Do not use another application's Worker name.
 
 Copy the resulting `https://…workers.dev` URL into `JEV_SERVICE_URL` in `.env`. Then:
 
@@ -116,7 +116,7 @@ npm run service -- status
 
 Confirm `paused: true`. No mailbox processing starts automatically during onboarding. Cloudflare pricing and account availability vary; review your own account's limits and [Wrangler secret documentation](https://developers.cloudflare.com/workers/configuration/secrets/).
 
-For updates, retain `.env`, the local mapping and the existing Worker name. Set `JEV_SERVICE_URL` and pause the service first; deployment checks its status. Do not redeploy a changed category profile onto an active ledger without a migration plan.
+For updates, retain `.env`, the local mapping and the existing Worker name. Set `JEV_SERVICE_URL` and pause the service first; deployment checks its exact account, URL and paused status. Run the preview again before applying; it rejects a changed target, profile or folder map. Do not redeploy a changed category profile onto an active ledger without a migration plan.
 
 ## 7. Review a real prediction, then enable
 

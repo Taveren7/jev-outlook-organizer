@@ -20,7 +20,7 @@ export function validateConfig(value:unknown):OrganizerConfig {
  if(!exactKeys(c,['version','ownerContext','organizationContext','timeZone','model','lookbackDays','dailyLimit','maxBodyCharacters','routing','types','attention','actions','review']))fail();
  try{new Intl.DateTimeFormat('en',{timeZone:c.timeZone});}catch{fail();}
  for(const [v,min,max] of [[c.lookbackDays,1,30],[c.dailyLimit,1,250],[c.maxBodyCharacters,1000,50000]])if(!Number.isInteger(v)||v!<min!||v!>max!)fail();
- if(!record(c.routing)||typeof c.routing.fileTruncatedMessages!=='boolean')fail();
+ if(!record(c.routing)||!exactKeys(c.routing,['choiceConfidence','choiceProbability','securityHold','fileTruncatedMessages'])||typeof c.routing.fileTruncatedMessages!=='boolean')fail();
  for(const v of [c.routing.choiceConfidence,c.routing.choiceProbability,c.routing.securityHold])if(typeof v!=='number'||!Number.isFinite(v)||v<0||v>1)fail();
  const labels:string[]=[];
  const checkLabel=(l:Label)=>{if(!record(l)||!exactKeys(l,['name','color'])||!text(l.name,60)||!color(l.color)||l.name.startsWith('JEV-'))fail();labels.push(l.name.toLowerCase());};
