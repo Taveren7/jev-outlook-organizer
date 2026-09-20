@@ -1,6 +1,6 @@
 # Jev Outlook Organizer
 
-Health dashboard and guarded reclassification, retry and undo are available in [the resilience guide](docs/resilience.md). Review operations use expiring previews and the durable audit; private customer/supplier/internal context is configurable.
+The dashboard supports manual Type corrections, optional learning from confirmed corrections, and guarded reclassification, retry and undo, documented in [the resilience guide](docs/resilience.md). Review operations use expiring previews and the durable audit; private customer/supplier/internal context is configurable.
 
 A self-hosted Microsoft 365 email organizer. TypeSafe Jev classifies messages; a Cloudflare Worker applies your folder and category rules. Supply your own Microsoft, Jev and Cloudflare accounts.
 

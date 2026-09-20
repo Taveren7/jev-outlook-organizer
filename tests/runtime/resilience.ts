@@ -7,13 +7,13 @@ message.bodyPreview='Synthetic short preview';message.webLink='https://outlook.o
 const clear=sample('soon','customer_sales','reply',.95);let answer={...clear,type:{...clear.type,confidence:.5}},calls=0,writes=0;
 const options:any={modules:true,scriptPath:'dist/production.js',compatibilityDate:'2026-09-19',durableObjects:{COORDINATOR:{className:'MailboxCoordinator',useSQLite:true}},durableObjectsPersist:directory,bindings:{ADMIN_TOKEN:token,MS_TENANT_ID:'tenant',MS_CLIENT_ID:'client',MS_CLIENT_SECRET:'fake',MS_MAILBOX_ID:'box',TYPESAFE_API_KEY:'fake',MAILBOX_LAYOUT:JSON.stringify(layout),RELATIONSHIP_CONTEXT:JSON.stringify({version:1,domains:{customer:['customer.test']},defaults:{customer:'customer_sales'}}),MS_SECRET_EXPIRES_AT:new Date(Date.now()+7*86400000).toISOString()},outboundService:async(request:Request)=>{
  const u=new URL(request.url);if(u.hostname==='login.microsoftonline.com')return Response.json({access_token:'fake'});
- if(u.hostname==='api.typesafe.ai'){calls++;const input=await request.json() as any;assert.equal(input.state.business_context.sender_relationship,'customer');assert.equal(input.state.business_context.default_type,'customer_sales');return Response.json({model:'synthetic',answers:answer,usage:{input_tokens:1,output_tokens:0}});}
+ if(u.hostname==='api.typesafe.ai'){calls++;const input=await request.json() as any;assert.equal(input.state.business_context.sender_relationship,'customer');assert.equal(input.state.business_context.default_type,'customer_sales');if(calls===3)assert.deepEqual(input.state.owner_correction_history.same_sender_corrections,[{type:'supply_chain',count:1}]);else assert.equal(input.state.owner_correction_history,undefined);return Response.json({model:'synthetic',answers:answer,usage:{input_tokens:1,output_tokens:0}});}
  assert.equal(u.hostname,'graph.microsoft.com');if(u.pathname.endsWith('/mailFolders/inbox/messages'))return Response.json({value:message.parentFolderId==='inbox'?[message]:[]});
  if(request.method==='PATCH'){assert.equal(request.headers.get('If-Match'),message['@odata.etag']);const body=await request.json() as any;assert.deepEqual(Object.keys(body),['categories']);message.categories=body.categories;message['@odata.etag']+='p';writes++;return Response.json(message);}
  if(u.pathname.endsWith('/move')){const folder=/\/mailFolders\/([^/]+)\/messages/.exec(u.pathname)?.[1];assert.equal(folder,message.parentFolderId);message.parentFolderId=(await request.json() as any).destinationId;message['@odata.etag']+='m';writes++;return Response.json(message);}
  if(u.pathname.endsWith('/mailFolders/inbox'))return Response.json({id:'inbox',displayName:'Inbox',parentFolderId:'root'});
  const folder=Object.values(layout.folders).find(f=>u.pathname.endsWith('/mailFolders/'+f.id));if(folder)return Response.json(folder);
- if(u.pathname.endsWith('/messages/synthetic-review')){if(u.searchParams.get('$select')==='subject,from,bodyPreview'){summaryReads++;assert.equal(request.method,'GET');if(summaryFails)return new Response('Synthetic private provider detail',{status:503});}return Response.json(message);}throw Error('Unexpected synthetic request');
+ if(u.pathname.endsWith('/messages/'+message.id)){if(u.searchParams.get('$select')==='subject,from,bodyPreview'){summaryReads++;assert.equal(request.method,'GET');if(summaryFails)return new Response('Synthetic private provider detail',{status:503});}return Response.json(message);}throw Error('Unexpected synthetic request');
 }};
 let mf=new Miniflare({...convertV4MiniflareOptions(options),resourcePersistencePath:directory});
 const call=async(path:string,body?:unknown,expected=200)=>{const response=await mf.dispatchFetch('https://service/admin/'+path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+token},...(body===undefined?{}:{body:JSON.stringify(body)})});assert.equal(response.status,expected,await response.clone().text());return response.json() as Promise<any>;};
@@ -43,5 +43,16 @@ try{
  const undo=await call('review/preview',{id:message.id,operation:'undo',requestId:'runtime-review-00002'});assert.equal(undo.state,'ready');
  assert.equal((await call('review/apply',{ticketId:undo.id})).state,'applied');assert.equal(message.parentFolderId,'inbox');assert.equal(writes,5);assert.equal(message.isRead,false);assert.equal(calls,2);
  assert.equal((await call('review/preview',{id:message.id,operation:'undo',requestId:'runtime-review-00003'})).state,'blocked');
+ assert.equal((await mf.dispatchFetch('https://service/admin/learning')).status,401);
+ assert.ok((await call('review/types')).types.some((t:any)=>t.key==='supply_chain'));
+ const manual=await call('review/preview',{id:message.id,operation:'correct',type:'supply_chain',learn:true,requestId:'runtime-correct-0001'});assert.equal(manual.state,'ready');assert.equal(calls,2);assert.equal((await call('learning')).activeCount,0);
+ assert.equal((await call('review/apply',{ticketId:manual.id})).state,'applied');assert.equal(message.parentFolderId,'supply_chain');assert.equal((await call('learning')).activeCount,1);assert.equal(calls,2);
+ await mf.dispose();mf=new Miniflare({...convertV4MiniflareOptions(options),resourcePersistencePath:directory});assert.equal((await call('learning')).activeCount,1);
+ message.id='synthetic-future';message.parentFolderId='inbox';message.categories=['Personal'];message['@odata.etag']='future-v1';
+ await call('scan',{});await call('resume',{mode:'type-folders',dailyLimit:100});
+ const started=Date.now();let fresh:any;do{await new Promise(r=>setTimeout(r,50));fresh=await call('status');}while((fresh.busy||!fresh.jobs.some((j:any)=>j.stage==='done'&&j.count===2))&&Date.now()-started<10000);
+ await call('pause',{});assert.equal(calls,3);assert.equal(message.isRead,false);assert.equal(message.parentFolderId,'customer_sales');
+ const learnedJob=(await call('jobs')).find((j:any)=>j.id==='synthetic-future');assert.deepEqual(learnedJob.learningExampleIds,[manual.id]);assert.equal(learnedJob.classification.type.choice,'customer_sales');
+ await call('learning/disable',{id:manual.id});assert.equal((await call('learning')).activeCount,0);
  console.log('Resilience runtime passed: authenticated dashboard/health, private relationships, persisted idempotent previews, shared model budget, verified rerun and undo, unread/flag preservation, and no undo replay. Synthetic providers only.');
 }finally{await mf.dispose();rmSync(directory,{recursive:true,force:true});}

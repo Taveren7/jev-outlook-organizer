@@ -1,3 +1,5 @@
+import {learningFor,LEARNING_WINDOW} from './learning';
+import {TYPE_NAMES} from '../outlook-layout';
 import {messageSummary,outlookWebLink} from './message-summary';
 import {healthReport,reviewReasons} from './health';
 import {previewReview,applyReview,type ReviewContext} from './review';
@@ -41,18 +43,31 @@ export class MailboxCoordinator {
   }
   private status(){return {service:'jev-outlook',policy:POLICY_VERSION,paused:!this.running(),mode:this.ledger.get<Mode>('mode','observe'),busy:this.busy,processing:'continuous',catchup:this.ledger.get('catchup',null),cooldownUntil:this.ledger.get('cooldownUntil',0),scanPhase:this.ledger.get('scanPhase',null),dailyLimit:this.ledger.get('dailyLimit',100),today:this.ledger.budget(Date.now()),jobs:this.ledger.counts(),lastScan:this.ledger.get('lastScan',0),lastSuccess:this.ledger.get('lastSuccess',0),lastClassification:this.ledger.get('lastClassification',0),lastError:this.ledger.get('lastError',null),launchAt:this.ledger.get('launchAt',0)};}
   private health(){const d=this.ledger.diagnostics();return healthReport({now:Date.now(),paused:!this.running(),lastScan:this.ledger.get('lastScan',0),lastSuccess:this.ledger.get('lastSuccess',0),dailyLimit:this.ledger.get('dailyLimit',100),used:this.ledger.budget(Date.now()).regularCalls,cooldownUntil:this.ledger.get('cooldownUntil',0),lastError:this.ledger.get('lastError',null),secretExpiresAt:this.env.MS_SECRET_EXPIRES_AT,counts:this.ledger.counts() as any,issues:d.issues as any,oldestPending:d.oldestPending});}
+  private async classify(message:any){
+    const learned=await learningFor(this.ledger,message.from,Object.keys(TYPE_NAMES),Date.now());
+    return {...await classifyMessage(message,this.env.TYPESAFE_API_KEY,productionFetch,this.env.RELATIONSHIP_CONTEXT,learned.hint),learningExampleIds:learned.ids};
+  }
   private async reviewContext():Promise<ReviewContext>{
-    const layout=this.layout();return {ledger:this.ledger,mail:new ProductionGraph(this.env),layout,revision:await fingerprint([POLICY_VERSION,this.env.MAILBOX_LAYOUT,this.env.RELATIONSHIP_CONTEXT??'',PROFILE_ID]),policyVersion:POLICY_VERSION,securityHold:CONFIG.routing.securityHold,now:Date.now,paused:()=>!this.running(),save:this.save,
+    const layout=this.layout();return {ledger:this.ledger,mail:new ProductionGraph(this.env),layout,revision:await fingerprint([POLICY_VERSION,this.env.MAILBOX_LAYOUT,this.env.RELATIONSHIP_CONTEXT??'',PROFILE_ID,'corrections-v1',this.ledger.get('learningRevision',0)]),policyVersion:POLICY_VERSION,securityHold:CONFIG.routing.securityHold,now:Date.now,paused:()=>!this.running(),save:this.save,
       reserve:()=>{if(Date.now()<this.ledger.get('cooldownUntil',0))throw Error('review_provider_cooldown');return this.ledger.reserve(Date.now(),false,this.ledger.get('dailyLimit',100));},
-      classify:async message=>{try{return await classifyMessage(message,this.env.TYPESAFE_API_KEY,productionFetch,this.env.RELATIONSHIP_CONTEXT);}catch(error){const throttle=throttled(error);if(throttle)this.ledger.set('cooldownUntil',Date.now()+throttle.retryAfterMs);throw error;}}};
+      classify:async message=>{try{return await this.classify(message);}catch(error){const throttle=throttled(error);if(throttle)this.ledger.set('cooldownUntil',Date.now()+throttle.retryAfterMs);throw error;}}};
   }
   async fetch(request:Request):Promise<Response>{
     const url=new URL(request.url),path=url.pathname;
     if(request.method==='GET'&&path==='/health')return json(this.health());
+    if(request.method==='GET'&&path==='/review/types')return json({types:Object.entries(TYPE_NAMES).map(([key,name])=>({key,name}))});
+    if(request.method==='GET'&&path==='/learning'){
+      const after=url.searchParams.get('after')??'';if(after.length>80)return json({error:'invalid_cursor'},400);
+      const rows=this.ledger.learningPage(after);return json({rows,activeCount:this.ledger.learningCount(Date.now()-LEARNING_WINDOW),next:rows.length===20?rows.at(-1)!.id:null});
+    }
+    if(request.method==='POST'&&path==='/learning/disable'){
+      if(this.running()||this.busy)return json({error:'pause_first'},409);
+      try{const body=await request.json() as any;if(this.running()||this.busy)return json({error:'pause_first'},409);if(typeof body.id!=='string'||body.id.length>80)return json({error:'invalid_request'},400);this.ledger.disableLearning(body.id);return json({disabled:true});}catch{return json({error:'correction_unavailable'},400);}
+    }
     if(request.method==='GET'&&path==='/review'){
       const after=url.searchParams.get('after')??'';if(after.length>2048)return json({error:'invalid_cursor'},400);
       const limit=Number(url.searchParams.get('limit')??100);if(!Number.isInteger(limit)||limit<1||limit>100)return json({error:'invalid_limit'},400);
-      const rows=this.ledger.page(after,limit);return json({rows:rows.map(job=>({id:job.id,stage:job.stage,receivedAt:job.receivedAt,type:job.classification?.type.choice,reasons:reviewReasons(job,CONFIG.routing.choiceConfidence,CONFIG.routing.choiceProbability,CONFIG.routing.securityHold)})),next:rows.length===limit?rows.at(-1)!.id:null});
+      const rows=this.ledger.page(after,limit);return json({rows:rows.map(job=>({id:job.id,stage:job.stage,receivedAt:job.receivedAt,type:job.humanCorrection?.type??job.classification?.type.choice,humanCorrected:!!job.humanCorrection,reasons:reviewReasons(job,CONFIG.routing.choiceConfidence,CONFIG.routing.choiceProbability,CONFIG.routing.securityHold)})),next:rows.length===limit?rows.at(-1)!.id:null});
     }
     if(request.method==='GET'&&path==='/review/message'){
       const id=url.searchParams.get('id')??'';if(!id||id.length>2048||!this.ledger.job(id))return json({error:'review_job_missing'},404);
@@ -161,7 +176,7 @@ export class MailboxCoordinator {
         if(!this.running())throw new PauseError();
         if(!this.ledger.reserve(Date.now(),Date.parse(job.receivedAt)<this.ledger.get('launchAt',0),this.ledger.get('dailyLimit',100),job.receivedAt))return;
         job={...job,stage:'classifying',attempts:job.attempts+1,updatedAt:Date.now()};await this.save(job);
-        const result=await classifyMessage(content.message,this.env.TYPESAFE_API_KEY,productionFetch,this.env.RELATIONSHIP_CONTEXT);
+        const result=await this.classify(content.message);
         const mode=this.ledger.get<Mode>('mode','observe');
         job={...job,...result,policyVersion:POLICY_VERSION,plan:routingPlan(before,result.classification,result.limitations,layout,mode,Date.now()),stage:mode==='observe'?'observed':'planned',updatedAt:Date.now()};
         await this.save(job);

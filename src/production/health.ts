@@ -1,7 +1,7 @@
 import type {Job} from './core';
 export function reviewReasons(job:Job,confidence=.8,probability=.8,security=.7):string[]{
  const reasons:string[]=[];if(job.stage==='protected')reasons.push('protected_prior_work');if(job.stage==='failed')reasons.push('failed');if(job.stage==='held')reasons.push(job.error??'held');
- if(job.stage==='done'&&job.plan&&!job.plan.destination&&job.classification){const c=job.classification;if(c.type.confidence<confidence||c.type.probabilities[c.type.choice]!<probability)reasons.push('uncertain_type');if(c.security_risk.noul>=security)reasons.push('security_review');if(job.limitations?.some(s=>s.includes('truncated')))reasons.push('truncated_input');}
+ if(job.stage==='done'&&job.plan&&!job.plan.destination&&job.classification){const c=job.classification;if(!job.humanCorrection&&(c.type.confidence<confidence||c.type.probabilities[c.type.choice]!<probability))reasons.push('uncertain_type');if(c.security_risk.noul>=security)reasons.push('security_review');if(job.limitations?.some(s=>s.includes('truncated')))reasons.push('truncated_input');}
  if(job.stage==='expired')reasons.push('outside_window');return reasons;
 }
 export function healthReport(input:{now:number;paused:boolean;lastScan:number;lastSuccess:number;dailyLimit:number;used:number;cooldownUntil:number;lastError:unknown;secretExpiresAt?:string;counts:Array<{stage:string;count:number}>;issues:Array<{code:string;count:number}>;oldestPending:number|null}){

@@ -1,10 +1,11 @@
+import type {LearningHint} from './production/learning';
 import {parseRelationships,relationshipContext,fingerprint} from './relationships';
 import {CONFIG} from './config';
 import { TypeSafeClient, type Fetch } from '@typesafe-ai/sdk';
 import type { MailInput } from './graph';
 import { QUESTIONS, parseClassification } from './taxonomy';
 
-export function prepareState(message: MailInput, relationships?:string) {
+export function prepareState(message: MailInput, relationships?:string, learning?:LearningHint) {
   const context=parseRelationships(relationships,Object.keys(CONFIG.types));
   const limitations: string[] = [];
   if (message.bodyText.length > CONFIG.maxBodyCharacters) limitations.push('Message body truncated; human review required.');
@@ -13,6 +14,7 @@ export function prepareState(message: MailInput, relationships?:string) {
   return {
     limitations,
     state: {
+      ...(learning?{owner_correction_history:learning}:{}),
       reviewer: CONFIG.ownerContext, organization: CONFIG.organizationContext,
       ...(context?{business_context:relationshipContext(message,context)}:{}),
       email: {
@@ -26,8 +28,8 @@ export function prepareState(message: MailInput, relationships?:string) {
   };
 }
 
-export async function classifyMessage(message: MailInput, apiKey: string, transport?: Fetch, relationships?:string) {
-  const prepared = prepareState(message,relationships);
+export async function classifyMessage(message: MailInput, apiKey: string, transport?: Fetch, relationships?:string, learning?:LearningHint) {
+  const prepared = prepareState(message,relationships,learning);
   const client = new TypeSafeClient({
     apiKey, baseURL: 'https://api.typesafe.ai', defaultModel: CONFIG.model,
     logLevel: 'off', timeout: 20_000, retry: { maxRetries: 0 }, fetch: transport,

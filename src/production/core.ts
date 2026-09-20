@@ -11,6 +11,7 @@ export interface Layout { mailboxId: string; inboxId: string; folders: Record<ke
 export interface Plan { before: Metadata; categories: string[]; finalCategories: string[]; destination: Folder | null; disposition: string }
 export type Stage = 'pending' | 'classifying' | 'retry' | 'planned' | 'patching' | 'patched' | 'moving' | 'moved' | 'stripping' | 'done' | 'observed' | 'held' | 'failed' | 'protected' | 'expired';
 export interface Job {
+  humanCorrection?:import('./learning').HumanCorrection; learningExampleIds?:string[];
   classifierContextVersion?:string;
   id: string; receivedAt: string; stage: Stage; attempts: number; due: number; updatedAt: number;
   plan?: Plan; checkpoint?: Metadata; classification?: Classification; model?: string; limitations?: string[];

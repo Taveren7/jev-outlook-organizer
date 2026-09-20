@@ -22,7 +22,8 @@ try{
   assert.equal(u.hostname,'graph.microsoft.com');
   if(u.pathname.endsWith('/mailFolders/inbox/messages'))return Response.json({value:[message]});
   if(request.method==='PATCH'){assert.equal(request.headers.get('If-Match'),message['@odata.etag']);message.categories=(await request.json() as any).categories;message['@odata.etag']+='p';effects.push('categories');return Response.json(message);}
-  if(u.pathname.endsWith('/move')){assert.equal((await request.json() as any).destinationId,'projects-folder');message.parentFolderId='projects-folder';message['@odata.etag']+='m';effects.push('move');return Response.json(message);}
+  if(u.pathname.endsWith('/move')){const destination=(await request.json() as any).destinationId;assert.ok(['projects-folder','receipts-folder'].includes(destination));message.parentFolderId=destination;message['@odata.etag']+='m';effects.push('move');return Response.json(message);}
+  if(u.pathname.endsWith('/mailFolders/receipts-folder'))return Response.json(layout.folders.receipts);
   if(u.pathname.endsWith('/mailFolders/projects-folder'))return Response.json(layout.folders.projects);
   if(u.pathname.endsWith('/messages/custom-test'))return Response.json(message);throw Error('Unexpected path');
  }};
@@ -32,10 +33,11 @@ try{
  const started=Date.now();let status:any;do{await new Promise(r=>setTimeout(r,50));status=await admin('status');}while((status.busy||!status.jobs.some((j:any)=>j.stage==='done'))&&Date.now()-started<10000);
  await admin('pause',{});assert.ok(status.jobs.some((j:any)=>j.stage==='done'),JSON.stringify(status));
  assert.equal(modelCalls,1);assert.equal(message.parentFolderId,'projects-folder');assert.deepEqual(message.categories,['Personal','Urgent','Respond','Check This','My Follow-up']);assert.equal(message.isRead,false);assert.deepEqual(message.flag,{flagStatus:'notFlagged'});assert.deepEqual(effects,['categories','move']);
+ const correction=await admin('review/preview',{id:message.id,operation:'correct',type:'receipts',learn:true,requestId:'custom-correction-0001'});assert.equal(correction.state,'ready');await admin('review/apply',{ticketId:correction.id});assert.equal(message.parentFolderId,'receipts-folder');assert.equal(modelCalls,1);assert.equal((await admin('learning')).activeCount,1);assert.equal(message.isRead,false);
  // Replacing the profile on the existing durable ledger must fail closed before any write.
  config.attention.now.name='Different Urgency';writeFileSync(join(directory,'organizer.config.json'),JSON.stringify(config));await mf.dispose();mf=undefined;
  bundle();
  mf=new Miniflare({...convertV4MiniflareOptions(options),resourcePersistencePath:join(directory,'state')});
- const changed=await admin('scan',{});assert.equal(changed.lastError.code,'profile_changed');assert.equal(effects.length,2);
+ const changed=await admin('scan',{});assert.equal(changed.lastError.code,'profile_changed');assert.equal(effects.length,4);
  console.log('Custom-profile Cloudflare runtime: arbitrary Type schema, owner context, custom labels, exact folder routing, preserved unread/flags, no temporary Type badge, and profile-change protection passed (synthetic providers).');
 }finally{if(mf)await mf.dispose();rmSync(directory,{recursive:true,force:true});}

@@ -60,3 +60,34 @@ test('retry requires a failed unmodified unclassified message and only queues bo
 test('provider extension fields do not enter persisted classifications',async()=>{
  const {parseClassification}=await import('../src/taxonomy');const input={...sample('soon','customer_sales','reply',.8),unexpected:'synthetic private text'};const result=parseClassification(input);assert.ok(!('unexpected' in result));
 });
+
+import {learningFor,LEARNING_WINDOW} from '../src/production/learning';
+const correction=(type='customer_sales',learn=true,id='correction-request-0001')=>({...request('correct',id),type,learn});
+test('manual correction preserves model evidence and task state, learns only after verified apply',async()=>{
+ const f=fixture(),original=structuredClone(f.source.classification),before=structuredClone(f.state());
+ const p=await previewReview(f.context,correction());assert.equal(p.state,'ready');assert.equal(f.calls(),0);assert.equal(f.reservations(),0);assert.equal(f.ledger.learningCount(0),0);assert.deepEqual(f.effects,[]);
+ await assert.rejects(previewReview(f.context,correction('supply_chain')));
+ await applyReview(f.context,p.id);assert.deepEqual(f.ledger.job('m')?.classification,original);assert.equal(f.ledger.job('m')?.humanCorrection?.type,'customer_sales');assert.equal(f.state().isRead,before.isRead);assert.deepEqual(f.state().flag,before.flag);assert.deepEqual(f.state().categories,before.categories);assert.equal(f.state().parentFolderId,'customer_sales');
+ const learned=await learningFor(f.ledger,mailInput.from,types,now);assert.deepEqual(learned.hint?.same_sender_corrections,[{type:'customer_sales',count:1}]);assert.deepEqual(learned.ids,[p.id]);
+ await applyReview(f.context,p.id);assert.equal(f.ledger.learningCount(0),1);assert.equal(f.effects.length,2);
+ assert.equal((await learningFor(f.ledger,'other@customer.test',types,now)).hint,undefined);assert.equal((await learningFor(f.ledger,mailInput.from,types,now+LEARNING_WINDOW+1)).hint,undefined);
+ const stored=JSON.stringify([f.ledger.job('m'),f.ledger.review(p.id),f.ledger.learningPage(),f.ledger.audit(0)]);assert.ok(!stored.includes(mailInput.from));assert.ok(!stored.includes(mailInput.bodyText));
+ f.ledger.disableLearning(p.id);f.ledger.save(f.ledger.job('m')!);assert.equal(f.ledger.learningCount(0),0);assert.equal((await learningFor(f.ledger,mailInput.from,types,now)).hint,undefined);
+});
+test('correction can fix a filed Type and undo restores the prior folder without reactivating learning',async()=>{
+ const f=fixture(),first=await previewReview(f.context,correction());await applyReview(f.context,first.id);
+ const second=await previewReview(f.context,correction('supply_chain',true,'correction-request-0002'));assert.equal(second.state,'ready');await applyReview(f.context,second.id);assert.equal(f.state().parentFolderId,'supply_chain');assert.equal(f.ledger.learningCount(0),1);
+ assert.deepEqual((await learningFor(f.ledger,mailInput.from,types,now)).hint?.same_sender_corrections,[{type:'supply_chain',count:1}]);
+ const undo=await previewReview(f.context,request('undo','correction-undo-00001'));assert.equal(undo.state,'ready');await applyReview(f.context,undo.id);assert.equal(f.state().parentFolderId,'customer_sales');assert.equal(f.ledger.job('m')?.humanCorrection?.type,'customer_sales');assert.equal(f.ledger.learningCount(0),0);assert.equal(f.calls(),0);
+});
+test('manual correction keeps security, truncation, completed and manual-state guards',async()=>{
+ for(const modify of [(j:Job)=>({...j,limitations:['body truncated']}),(j:Job)=>({...j,classification:{...j.classification!,security_risk:{type:'noul' as const,noul:.8}}}),(j:Job)=>({...j,stage:'protected' as const})]){const f=fixture();f.ledger.save(modify(f.source));assert.equal((await previewReview(f.context,correction())).state,'blocked');assert.equal(f.ledger.learningCount(0),0);assert.equal(f.effects.length,0);}
+ for(const change of [{flag:{flagStatus:'complete'}},{categories:['Manual']},{isRead:true}]){const f=fixture();f.setState(change);assert.equal((await previewReview(f.context,correction())).state,'blocked');}
+ const f=fixture();await assert.rejects(previewReview(f.context,correction('not_a_type')));const p=await previewReview(f.context,correction());f.setState({'@odata.etag':'edited'});await assert.rejects(applyReview(f.context,p.id));assert.equal(f.ledger.learningCount(0),0);
+});
+test('interrupted correction activates once on recovery and message-only corrections never teach',async()=>{
+ const f=fixture(),p=await previewReview(f.context,correction()),move=f.mail.move;f.mail.move=async(...args:any[])=>{await move(...args);throw Error('Lost response');};
+ assert.equal((await applyReview(f.context,p.id)).state,'recovery_required');assert.equal(f.ledger.learningCount(0),0);await applyReview(f.context,p.id);assert.equal(f.effects.length,2);
+ await applyJob(f.ledger.job('m')!,f.mail,f.context.save,()=>true,()=>now);assert.equal(f.ledger.learningCount(0),1);assert.equal(f.effects.length,2);
+ const g=fixture(),single=await previewReview(g.context,correction('customer_sales',false));await applyReview(g.context,single.id);assert.equal(g.ledger.learningCount(0),0);assert.equal(g.state().parentFolderId,'customer_sales');
+});

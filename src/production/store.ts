@@ -9,6 +9,8 @@ export class Ledger {
     sql.exec('CREATE INDEX IF NOT EXISTS jobs_ready ON jobs(stage,due,received)');
     sql.exec('CREATE TABLE IF NOT EXISTS events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, id TEXT NOT NULL, stage TEXT NOT NULL, data TEXT NOT NULL)');
     sql.exec('CREATE TABLE IF NOT EXISTS reviews (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
+    sql.exec('CREATE TABLE IF NOT EXISTS corrections (id TEXT PRIMARY KEY, messageId TEXT NOT NULL, senderKey TEXT NOT NULL, type TEXT NOT NULL, originalType TEXT NOT NULL, createdAt INTEGER NOT NULL, active INTEGER NOT NULL)');
+    sql.exec('CREATE INDEX IF NOT EXISTS corrections_sender ON corrections(senderKey,active,createdAt)');
     sql.exec('CREATE TABLE IF NOT EXISTS budgets (day TEXT PRIMARY KEY, calls INTEGER NOT NULL, backfill INTEGER NOT NULL)');
   }
   get<T>(key:string,fallback:T):T {const r=this.sql.exec('SELECT value FROM settings WHERE key=?',key).toArray()[0];return r?JSON.parse(r.value):fallback;}
@@ -18,9 +20,24 @@ export class Ledger {
     const data=JSON.stringify(job);
     this.sql.exec('INSERT OR REPLACE INTO jobs VALUES (?,?,?,?,?)',job.id,job.stage,job.receivedAt,job.due,data);
     this.sql.exec('INSERT INTO events(time,id,stage,data) VALUES (?,?,?,?)',job.updatedAt,job.id,job.stage,data);
+    // Only verified completion creates learning evidence, including durable recovery.
+    if(job.stage==='done'&&job.reviewId){
+      const ticket=this.review(job.reviewId);
+      if(job.reviewOperation==='correct'&&job.humanCorrection&&ticket?.operation==='correct'&&!this.sql.exec('SELECT id FROM corrections WHERE id=?',job.reviewId).toArray().length){
+        const c=job.humanCorrection;
+        this.sql.exec('UPDATE corrections SET active=0 WHERE messageId=?',job.id);
+        this.sql.exec('INSERT INTO corrections VALUES (?,?,?,?,?,?,?)',job.reviewId,job.id,c.senderKey??'',c.type,ticket.source.humanCorrection?.type??ticket.source.classification?.type.choice??'',job.updatedAt,c.learn&&c.senderKey?1:0);
+        this.set('learningRevision',this.get('learningRevision',0)+1);
+      }
+      if(job.reviewOperation==='undo'&&ticket?.source?.reviewOperation==='correct')this.disableLearning(ticket.source.reviewId);
+    }
   }
   review(id:string):any {const r=this.sql.exec('SELECT data FROM reviews WHERE id=?',id).toArray()[0];return r?JSON.parse(r.data):undefined;}
   saveReview(review:any){this.sql.exec('INSERT OR REPLACE INTO reviews VALUES (?,?)',review.id,JSON.stringify(review));}
+  learningMatches(senderKey:string,since:number):Array<{id:string;type:string}>{return this.sql.exec('SELECT id,type FROM corrections WHERE senderKey=? AND active=1 AND createdAt>=? ORDER BY createdAt DESC,id DESC LIMIT 20',senderKey,since).toArray() as any;}
+  learningPage(after='',limit=20){return this.sql.exec('SELECT id,messageId,type,originalType,createdAt,active FROM corrections WHERE id>? ORDER BY id LIMIT ?',after,limit).toArray();}
+  learningCount(since:number){return Number(this.sql.exec('SELECT COUNT(*) AS n FROM corrections WHERE active=1 AND createdAt>=?',since).toArray()[0]?.n??0);}
+  disableLearning(id:string){const row=this.sql.exec('SELECT active FROM corrections WHERE id=?',id).toArray()[0];if(!row)throw Error('review_correction_missing');if(row.active){this.sql.exec('UPDATE corrections SET active=0 WHERE id=?',id);this.set('learningRevision',this.get('learningRevision',0)+1);}}
   page(after='',limit=100){return this.sql.exec('SELECT data FROM jobs WHERE id>? ORDER BY id LIMIT ?',after,limit).toArray().map(r=>JSON.parse(r.data) as Job);}
   diagnostics(){return {issues:this.sql.exec("SELECT COALESCE(json_extract(data,'$.error'),'unknown') AS code,COUNT(*) AS count FROM jobs WHERE stage IN ('failed','held','retry') GROUP BY code").toArray(),oldestPending:this.sql.exec("SELECT MIN(json_extract(data,'$.updatedAt')) AS oldest FROM jobs WHERE stage IN ('pending','retry','planned','classifying')").toArray()[0]?.oldest??null};}
   counts(){return this.sql.exec('SELECT stage,COUNT(*) AS count FROM jobs GROUP BY stage').toArray();}
