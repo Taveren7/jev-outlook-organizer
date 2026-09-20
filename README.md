@@ -73,15 +73,13 @@ The **SQLite Durable Object** keeps queue state, budgets, classifications, befor
 Pause the organizer, inspect a message's subject/sender/preview, choose **Correct Type → This belongs in…**, then **Preview → Apply**. The correction preserves task labels, unread state and flags, and records your choice separately from the model's original answer. Existing security, truncation, completion and manual-change protections still apply.
 
 ```mermaid
-flowchart LR
-  A[You correct a Type] --> B[Preview and apply]
-  B --> C[Mailbox change verified]
-  C --> D{Learning enabled?}
-  D -->|Yes| E[Save private correction metadata]
-  E --> F[Future mail from the same sender]
-  F --> G[Type counts added to Jev context]
-  G --> H[Fresh judgment and normal filing checks]
-  D -->|No| I[Correct this message only]
+flowchart TB
+  A[Correct Type: Preview then Apply] --> B[Mailbox change verified]
+  B --> C{Use correction for learning?}
+  C -->|No| D[This message only]
+  C -->|Yes| E[Private same-sender Type counts]
+  E --> F[Future email plus hints sent to Jev]
+  F --> G[Fresh decision and normal filing checks]
 ```
 
 Learning supplies **Type counts from up to 20 corrected messages from the exact same sender over 180 days**. It is contextual guidance, not model fine-tuning or a forced sender rule. Undo and **Stop learning** revoke examples. It does not automatically reprocess old mail or learn from arbitrary folder moves. [Review behavior and privacy](docs/resilience.md)
