@@ -17,3 +17,14 @@ test('optional action indicator validates names, colors and probability without 
  for(const indicator of [null,{}, {name:'Needs Me',color:'preset0',threshold:NaN},{name:'Needs Me',color:'preset0',threshold:1.01},{name:'Needs Me',color:'red',threshold:.9},{name:CONFIG.actions.reply.name,color:'preset0',threshold:.9}])assert.throws(()=>validateConfig({...CONFIG,actionIndicator:indicator}));
  const custom={...CONFIG,actionIndicator:{name:'My Action',color:'preset2',threshold:.95}};assert.equal(validateConfig(custom).actionIndicator?.threshold,.95);
 });
+
+import extended from '../organizer.extended.example.json';
+test('expanded onboarding preset includes three general-purpose Types with strict complete distributions',()=>{
+ const config=validateConfig(extended),types=Object.fromEntries(Object.entries(config.types).map(([k,v])=>[k,v.description]));assert.equal(Object.keys(types).length,13);
+ for(const [key,name] of Object.entries({business_admin:'Business Admin',travel_events:'Travel & Events',personal:'Personal'})){
+  assert.equal(config.types[key]!.folder,name);assert.equal(config.types[key]!.routine,false);
+  const value={...sample('soon','other','reply',.9),type:{type:'choice',choice:key,confidence:.99,probabilities:Object.fromEntries(Object.keys(types).map(k=>[k,k===key?.99:.01/12]))}};
+  assert.equal(parseClassification(value,types).type.choice,key);assert.throws(()=>parseClassification(value));
+ }
+ assert.equal(Object.keys(CONFIG.types).length,10,'existing default profile remains unchanged');
+});

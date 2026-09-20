@@ -2,7 +2,7 @@ import {Miniflare,convertV4MiniflareOptions} from 'miniflare';import {mkdtempSyn
 import {TYPE_NAMES} from '../../src/outlook-layout';import {sample} from '../../fixtures/examples';
 const directory=mkdtempSync(join(tmpdir(),'jev-resilience-')),token='r'.repeat(40),receivedDateTime=new Date(Date.now()-60000).toISOString();
 const layout={mailboxId:'box',inboxId:'inbox',folders:Object.fromEntries(Object.entries(TYPE_NAMES).map(([key,name])=>[key,{id:key,displayName:name,parentFolderId:'inbox'}]))};
-const message:any={id:'synthetic-review','@odata.etag':'v1',receivedDateTime,parentFolderId:'inbox',categories:['Personal'],isRead:false,flag:{flagStatus:'notFlagged'},subject:'Synthetic order',from:{emailAddress:{address:'buyer@customer.test'}},toRecipients:[],ccRecipients:[],body:{contentType:'text',content:'Please review this order.'},hasAttachments:false};
+const message:any={id:'synthetic-review','@odata.etag':'v1',receivedDateTime,parentFolderId:'inbox',categories:['Keep Me'],isRead:false,flag:{flagStatus:'notFlagged'},subject:'Synthetic order',from:{emailAddress:{address:'buyer@customer.test'}},toRecipients:[],ccRecipients:[],body:{contentType:'text',content:'Please review this order.'},hasAttachments:false};
 message.bodyPreview='Synthetic short preview';message.webLink='https://outlook.office365.com/owa/?ItemID=synthetic';let summaryReads=0,summaryFails=false;
 const clear=sample('soon','customer_sales','reply',.95);let answer={...clear,type:{...clear.type,confidence:.5}},calls=0,writes=0;
 const options:any={modules:true,scriptPath:'dist/production.js',compatibilityDate:'2026-09-19',durableObjects:{COORDINATOR:{className:'MailboxCoordinator',useSQLite:true}},durableObjectsPersist:directory,bindings:{ADMIN_TOKEN:token,MS_TENANT_ID:'tenant',MS_CLIENT_ID:'client',MS_CLIENT_SECRET:'fake',MS_MAILBOX_ID:'box',TYPESAFE_API_KEY:'fake',MAILBOX_LAYOUT:JSON.stringify(layout),RELATIONSHIP_CONTEXT:JSON.stringify({version:1,domains:{customer:['customer.test']},defaults:{customer:'customer_sales'}}),MS_SECRET_EXPIRES_AT:new Date(Date.now()+7*86400000).toISOString()},outboundService:async(request:Request)=>{
@@ -48,7 +48,7 @@ try{
  const manual=await call('review/preview',{id:message.id,operation:'correct',type:'supply_chain',learn:true,requestId:'runtime-correct-0001'});assert.equal(manual.state,'ready');assert.equal(calls,2);assert.equal((await call('learning')).activeCount,0);
  assert.equal((await call('review/apply',{ticketId:manual.id})).state,'applied');assert.equal(message.parentFolderId,'supply_chain');assert.equal((await call('learning')).activeCount,1);assert.equal(calls,2);
  await mf.dispose();mf=new Miniflare({...convertV4MiniflareOptions(options),resourcePersistencePath:directory});assert.equal((await call('learning')).activeCount,1);
- message.id='synthetic-future';message.parentFolderId='inbox';message.categories=['Personal'];message['@odata.etag']='future-v1';
+ message.id='synthetic-future';message.parentFolderId='inbox';message.categories=['Keep Me'];message['@odata.etag']='future-v1';
  await call('scan',{});await call('resume',{mode:'type-folders',dailyLimit:100});
  const started=Date.now();let fresh:any;do{await new Promise(r=>setTimeout(r,50));fresh=await call('status');}while((fresh.busy||!fresh.jobs.some((j:any)=>j.stage==='done'&&j.count===2))&&Date.now()-started<10000);
  await call('pause',{});assert.equal(calls,3);assert.equal(message.isRead,false);assert.equal(message.parentFolderId,'customer_sales');

@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "ownerContext": "The mailbox owner, responsible for their own work and follow-up.",
+  "organizationContext": "A business mailbox. Customers buy from us; suppliers sell to us.",
+  "timeZone": "UTC",
+  "model": "jev-latest",
+  "lookbackDays": 30,
+  "dailyLimit": 100,
+  "maxBodyCharacters": 12000,
+  "routing": {
+    "choiceConfidence": 0.8,
+    "choiceProbability": 0.8,
+    "securityHold": 0.7,
+    "fileTruncatedMessages": false
+  },
+  "types": {
+    "customer_sales": {
+      "description": "Sales to our customers: our products, selling prices, customer orders/POs, capacity, samples, rushes and forecasts. Excludes our purchases from suppliers, even when their message calls us a customer.",
+      "folder": "Customer Sales",
+      "color": "preset8",
+      "routine": false
+    },
+    "customer_accounting": {
+      "description": "Active accounting work for sales to our customers: payments, credits, invoice questions, billing discrepancies, collections or unpaid balances, including internal discussion of them. Routine outgoing shipping invoices with no accounting issue use pack_invoice_confirmation. Excludes receipts for products or services we purchased.",
+      "folder": "Customer Accounting",
+      "color": "preset8",
+      "routine": false
+    },
+    "supply_chain": {
+      "description": "Active human conversation about our purchases from suppliers, materials, freight or logistics, including purchase-related supplier paperwork requests. Excludes routine transaction documents and unsolicited offers trying to win our business.",
+      "folder": "Supply Chain",
+      "color": "preset8",
+      "routine": false
+    },
+    "internal_production": {
+      "description": "Internal production, scheduling, WIP, quality or shipping status, including daily delivery-value dashboards and shipping performance against goals. These reports belong here even when generated automatically.",
+      "folder": "Production",
+      "color": "preset8",
+      "routine": false
+    },
+    "internal_maintenance": {
+      "description": "Machine issues, repair requests, maintenance parts and maintenance purchasing requests.",
+      "folder": "Maintenance",
+      "color": "preset8",
+      "routine": false
+    },
+    "pack_invoice_confirmation": {
+      "description": "Routine transaction documents: packing slips, vendor invoices, outgoing shipping invoices with no accounting issue, order/shipment confirmations, tracking and paid receipts for products or services we purchased, including software subscriptions. A forwarded purchase receipt remains in this category when the receipt is the main purpose.",
+      "folder": "Receipts & Docs",
+      "color": "preset8",
+      "routine": true
+    },
+    "it_systems": {
+      "description": "IT support, account/access, software, websites, integrations or infrastructure; use for substantive IT issues.",
+      "folder": "IT & Systems",
+      "color": "preset8",
+      "routine": false
+    },
+    "automated": {
+      "description": "Other automated operational notifications, alerts, reports, digests and completed-system notifications without a more specific workflow. A table or report format alone does not prove automation; internal production/shipping reports use internal_production.",
+      "folder": "Automated",
+      "color": "preset8",
+      "routine": true
+    },
+    "newsletter_marketing": {
+      "description": "Newsletters, promotions, surveys, solicitations, industry news and sales outreach, including unsolicited freight or supplier pitches seeking our business without an active order or requested quote.",
+      "folder": "Newsletters",
+      "color": "preset8",
+      "routine": true
+    },
+    "other": {
+      "description": "A purpose outside the available business and personal categories. Not a substitute for uncertainty.",
+      "folder": "Other",
+      "color": "preset8",
+      "routine": false
+    },
+    "business_admin": {
+      "description": "Company administration: banking, financing, business insurance, legal matters, contracts, tax, compliance, HR, payroll and employee benefits. Specific customer billing disputes remain customer_accounting; supplier order/freight work remains supply_chain; production, maintenance and IT keep their specific Types. Routine purchased-product or service receipts remain pack_invoice_confirmation. Personal household administration uses personal.",
+      "folder": "Business Admin",
+      "color": "preset12",
+      "routine": false
+    },
+    "travel_events": {
+      "description": "Travel planning and trip logistics, flight/hotel itineraries and reservations, meeting or event scheduling, invitations and registrations, including conferences and site visits. Specific customer order/sales work takes precedence over a passing mention of a meeting. Paid receipts whose main purpose is proof of purchase remain pack_invoice_confirmation; unsolicited travel promotions remain newsletter_marketing.",
+      "folder": "Travel & Events",
+      "color": "preset12",
+      "routine": false
+    },
+    "personal": {
+      "description": "Non-work family, household and personal correspondence, including personal appointments, personal insurance and household administration. Use only when a personal purpose is supported, not merely because a sender uses a personal email domain. Company administration uses business_admin; purchased-product/service receipts remain pack_invoice_confirmation and unsolicited promotions remain newsletter_marketing.",
+      "folder": "Personal",
+      "color": "preset12",
+      "routine": false
+    }
+  },
+  "attention": {
+    "now": {
+      "name": "Now",
+      "color": "preset0"
+    },
+    "soon": {
+      "name": "Soon",
+      "color": "preset1"
+    },
+    "informational": {
+      "name": "FYI",
+      "color": "preset7"
+    },
+    "none": {
+      "name": "No Action",
+      "color": "preset12"
+    }
+  },
+  "actions": {
+    "reply": {
+      "name": "Reply",
+      "color": "preset14"
+    },
+    "review_investigate": {
+      "name": "Review",
+      "color": "preset14"
+    },
+    "approve_decide": {
+      "name": "Approve",
+      "color": "preset14"
+    },
+    "order_buy": {
+      "name": "Buy",
+      "color": "preset14"
+    },
+    "delegate": {
+      "name": "Delegate",
+      "color": "preset14"
+    },
+    "reference": {
+      "name": "Reference",
+      "color": "preset14"
+    },
+    "archive": {
+      "name": "Archive",
+      "color": "preset14"
+    },
+    "other": {
+      "name": "Other Action",
+      "color": "preset14"
+    }
+  },
+  "review": {
+    "needsReview": {
+      "name": "Needs Review",
+      "color": "preset8"
+    },
+    "securityReview": {
+      "name": "Security Review",
+      "color": "preset8"
+    }
+  },
+  "actionIndicator": {
+    "name": "Needs Me",
+    "color": "preset0",
+    "threshold": 0.9
+  }
+}

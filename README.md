@@ -23,7 +23,7 @@ npm run setup
 
 The setup command creates a local `.env` with a random administration token, preserves existing configuration, and prints the onboarding steps. It does not connect to your mailbox or deploy anything.
 
-1. Edit [organizer.config.json](organizer.config.json) for your context and categories.
+1. Edit [organizer.config.json](organizer.config.json) for your context and categories. For a new installation, the optional [expanded preset](docs/configuration.md#expanded-preset-for-a-new-installation) adds Business Admin, Travel & Events and Personal.
 2. Follow the [Microsoft and Cloudflare onboarding guide](docs/setup.md); put your own keys and credentials in `.env`.
 3. Check access and preview folder/category creation:
 

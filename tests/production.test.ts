@@ -10,7 +10,7 @@ import {MailboxCoordinator,type ProductionEnv} from '../src/production/coordinat
 
 const now=Date.parse('2026-09-20T17:00:00Z');
 const layout:Layout={mailboxId:'box',inboxId:'inbox',folders:Object.fromEntries(Object.entries(TYPE_NAMES).map(([k,v])=>[k,{id:k,displayName:v,parentFolderId:'inbox'}])) as Layout['folders']};
-const before:Metadata={id:'message','@odata.etag':'v1',isRead:false,categories:['Personal'],flag:{flagStatus:'notFlagged'},parentFolderId:'inbox',receivedDateTime:new Date(now-3600_000).toISOString()};
+const before:Metadata={id:'message','@odata.etag':'v1',isRead:false,categories:['Keep Me'],flag:{flagStatus:'notFlagged'},parentFolderId:'inbox',receivedDateTime:new Date(now-3600_000).toISOString()};
 function fixture(){
   let state=structuredClone(before),saved:Job|undefined;const effects:string[]=[];
   const mail:MailAdapter={metadata:async()=>structuredClone(state),folder:async id=>structuredClone(layout.folders[id as keyof typeof TYPE_NAMES]!),categories:async(_id,cats,etag)=>{assert.equal(etag,state['@odata.etag']);effects.push('patch');state={...state,categories:cats,'@odata.etag':state['@odata.etag']+'x'};},move:async(_id,source,dest)=>{assert.equal(source,state.parentFolderId);effects.push('move');state={...state,parentFolderId:dest,'@odata.etag':'moved'};}};
@@ -20,25 +20,25 @@ function fixture(){
 test('routine filing removes only duplicate Type, preserving read state, flags and unrelated categories',async()=>{
   const f=fixture(),done=await applyJob(f.job,f.mail,f.save,()=>true,()=>now);
   assert.equal(done.stage,'done');assert.deepEqual(f.effects,['patch','move','patch']);
-  assert.deepEqual(f.state().categories,['Personal','FYI','Reference']);assert.equal(f.state().isRead,false);assert.equal(f.state().parentFolderId,'pack_invoice_confirmation');
+  assert.deepEqual(f.state().categories,['Keep Me','FYI','Reference']);assert.equal(f.state().isRead,false);assert.equal(f.state().parentFolderId,'pack_invoice_confirmation');
 });
-test('type-folder mode routes all ten clear Types independently of uncertain task decisions',()=>{
+test('type-folder mode routes all configured clear Types independently of uncertain task decisions',()=>{
   for(const type of Object.keys(TYPE_NAMES) as Array<keyof typeof TYPE_NAMES>){
     const base=sample('soon',type,'reply',0.5,0.3);const c={...base,attention:{...base.attention,confidence:0.5},action:{...base.action,confidence:0.5}};
     const plan=routingPlan(before,c,['Attachments not analyzed'],layout,'type-folders',now);
-    assert.equal(plan.destination?.id,type);assert.deepEqual(plan.categories,plan.finalCategories);assert.ok(!plan.categories.includes(TYPE_NAMES[type]!));assert.deepEqual(plan.finalCategories,['Personal','Soon','Review','Needs Review']);
+    assert.equal(plan.destination?.id,type);assert.deepEqual(plan.categories,plan.finalCategories);assert.ok(!plan.categories.includes(TYPE_NAMES[type]!));assert.deepEqual(plan.finalCategories,['Keep Me','Soon','Review','Needs Review']);
   }
 });
 test('clear urgent requests and flags remain visible in their Type folder',()=>{
   const flagged={...before,flag:{flagStatus:'flagged',dueDateTime:{dateTime:'2026-09-21T00:00:00',timeZone:'UTC'}}};
   const plan=routingPlan(flagged,sample('now','customer_sales','reply',0.98),['Attachments not analyzed'],layout,'type-folders',now);
-  assert.equal(plan.destination?.id,'customer_sales');assert.deepEqual(plan.finalCategories,['Personal','Now','Reply','Needs Review','Needs Me']);assert.deepEqual(plan.before.flag,flagged.flag);
+  assert.equal(plan.destination?.id,'customer_sales');assert.deepEqual(plan.finalCategories,['Keep Me','Now','Reply','Needs Review','Needs Me']);assert.deepEqual(plan.before.flag,flagged.flag);
 });
 test('unclear Type, high risk and truncated input still block Type filing',()=>{
   for(const change of ['confidence','probability','security','truncated']){
     let c=sample('informational','automated','reference',0.01);
     if(change==='confidence')c={...c,type:{...c.type,confidence:0.79}};
-    if(change==='probability')c={...c,type:{...c.type,probabilities:Object.fromEntries(Object.keys(TYPE_NAMES).map(key=>[key,key==='automated'?0.79:0.21/9])) as typeof c.type.probabilities}};
+    if(change==='probability')c={...c,type:{...c.type,probabilities:Object.fromEntries(Object.keys(TYPE_NAMES).map(key=>[key,key==='automated'?0.79:0.21/(Object.keys(TYPE_NAMES).length-1)])) as typeof c.type.probabilities}};
     if(change==='security')c={...c,security_risk:{...c.security_risk,noul:0.7}};
     const plan=routingPlan(before,c,change==='truncated'?['body truncated']:[],layout,'type-folders',now);
     assert.equal(plan.destination,null);

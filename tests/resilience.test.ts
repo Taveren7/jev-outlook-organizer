@@ -19,7 +19,7 @@ test('health keeps unresolved jobs visible after a successful scan clears lastEr
 function fixture(){
  const db=new DatabaseSync(':memory:');const sql={exec:(q:string,...args:any[])=>{const rows=db.prepare(q).all(...args);return {toArray:()=>rows};}};const ledger=new Ledger(sql);
  const layout:Layout={mailboxId:'box',inboxId:'inbox',folders:Object.fromEntries(Object.entries(TYPE_NAMES).map(([k,v])=>[k,{id:k,displayName:v,parentFolderId:'inbox'}])) as Layout['folders']};
- const initial:Metadata={id:'m','@odata.etag':'v1',parentFolderId:'inbox',isRead:false,categories:['Personal'],flag:{flagStatus:'flagged'},receivedDateTime:new Date(now-1000).toISOString()};
+ const initial:Metadata={id:'m','@odata.etag':'v1',parentFolderId:'inbox',isRead:false,categories:['Keep Me'],flag:{flagStatus:'flagged'},receivedDateTime:new Date(now-1000).toISOString()};
  let state=structuredClone(initial),paused=true,reservations=0,calls=0,changed=false;const effects:string[]=[];
  const answer=sample('soon','customer_sales','reply',.8),uncertain={...answer,type:{...answer.type,confidence:.5}};
  const plan=routingPlan(initial,uncertain,[],layout,'type-folders',now);state={...state,categories:plan.categories,'@odata.etag':'v2'};
@@ -54,7 +54,7 @@ test('lost move responses recover by reading state, never by replaying the move'
  const done=await applyJob(f.ledger.job('m')!,f.mail,f.context.save,()=>true,()=>now);assert.equal(done.stage,'done');assert.equal(f.effects.filter(x=>x==='move').length,1);
 });
 test('retry requires a failed unmodified unclassified message and only queues bounded work',async()=>{
- const f=fixture();f.setState({categories:['Personal']});f.ledger.save({id:'m',stage:'failed',receivedAt:f.state().receivedDateTime,attempts:3,due:now,updatedAt:now,error:'processing_failed'});
+ const f=fixture();f.setState({categories:['Keep Me']});f.ledger.save({id:'m',stage:'failed',receivedAt:f.state().receivedDateTime,attempts:3,due:now,updatedAt:now,error:'processing_failed'});
  const p=await previewReview(f.context,request('retry'));assert.equal(p.state,'ready');assert.equal((await applyReview(f.context,p.id)).state,'queued');assert.equal(f.ledger.job('m')?.attempts,0);assert.equal(f.ledger.job('m')?.stage,'pending');assert.equal(f.calls(),0);assert.equal(f.effects.length,0);
 });
 test('provider extension fields do not enter persisted classifications',async()=>{

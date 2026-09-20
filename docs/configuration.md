@@ -50,3 +50,19 @@ Reading an email never means its task is complete. Explicit completed flags are 
 Pause first and export your audit. The coordinator binds its ledger to the exact profile and mailbox identity; a changed profile fails closed with `profile_changed`. Changing a JSON file and redeploying is not an automatic migration of existing folders, categories, classifications or completed jobs.
 
 This release supports customization during initial onboarding. For later schema changes, plan a deliberate migration: preserve the old ledger, review folder/category mappings and protect previous message IDs before starting a separately configured Worker. Do not reset a ledger or strip old labels to force replay. Automated migrations and a graphical configuration editor are not included.
+
+## Expanded preset for a new installation
+
+[organizer.extended.example.json](../organizer.extended.example.json) adds three Types to the original ten:
+
+| Folder | Main purpose |
+| --- | --- |
+| Business Admin | Company banking, financing, insurance, legal, tax, compliance, HR, payroll and benefits |
+| Travel & Events | Travel logistics, reservations, invitations, scheduling and event registrations |
+| Personal | Family, household and personal correspondence or administration |
+
+Specific customer, supplier, production, maintenance and IT work keeps its specific Type. Proof-of-purchase receipts remain Receipts & Docs; unsolicited promotions remain Newsletters. A personal email domain alone does not establish Personal. These are classification descriptions, not keyword rules or measured accuracy claims.
+
+Before your first mailbox setup or deployment, copy this example over `organizer.config.json`, then edit your context and run `npm run config:check`. On Windows PowerShell use `Copy-Item organizer.extended.example.json organizer.config.json`; on macOS/Linux use `cp organizer.extended.example.json organizer.config.json`. The normal onboarding preview includes all thirteen folders/categories. The optional Search Folder setup scopes the task views to Inbox plus all thirteen Types. The dashboard correction menu uses the same configured Types.
+
+The default configuration is unchanged so a code upgrade does not change an existing profile. Do not copy this preset over an active installation; follow the migration guidance above. No existing mail is automatically reclassified by this release.

@@ -8,11 +8,14 @@ import type {Ledger} from './store';
 export interface ReviewTicket {id:string;messageId:string;operation:'rerun'|'undo'|'retry'|'correct';correction?:HumanCorrection;createdAt:number;expiresAt:number;revision:string;sourceHash:string;state:string;source:Job;before?:Metadata;proposal?:Job;error?:string;finishedAt?:number}
 export interface ReviewContext {ledger:Ledger;mail:ProductionGraph;layout:Layout;revision:string;policyVersion:string;securityHold:number;now:()=>number;classify:(message:any)=>Promise<any>;reserve:()=>boolean;paused:()=>boolean;save:(job:Job)=>Promise<void>}
 export function sameState(expected:Metadata,current:Metadata,allowVersionDrift=true){if(expected.receivedDateTime!==current.receivedDateTime)throw Error('review_state_changed');try{assertLayoutState(allowVersionDrift?{...expected,'@odata.etag':current['@odata.etag']}:expected,current);}catch{throw Error('review_state_changed');}}
-export function rerunPlan(source:Job,current:Metadata,result:any,layout:Layout,now:number,securityHold=.7):Plan {
+export function assertRerunEligible(source:Job,current:Metadata,layout:Layout,securityHold=.7){
  if(source.humanCorrection)throw Error('review_human_corrected');
- if(source.stage!=='done'||!source.after||!source.plan||source.plan.destination||!source.classification||source.classification.security_risk.noul>=securityHold||source.limitations?.some(s=>s.includes('truncated')))throw Error('review_protected');
+ if(source.stage!=='done'||!source.after||!source.plan||source.plan.destination||!source.classification||source.classification.security_risk.noul>=securityHold||source.limitations?.some(s=>s.includes('truncated'))||current.parentFolderId!==layout.inboxId||managed(source.plan.before.categories))throw Error('review_protected');
  sameState(source.after,current);
- const plan=routingPlan({...current,categories:source.plan.before.categories},result.classification,result.limitations,layout,'type-folders',now);return {...plan,before:current};
+}
+export function rerunPlan(source:Job,current:Metadata,result:any,layout:Layout,now:number,securityHold=.7):Plan {
+ assertRerunEligible(source,current,layout,securityHold);
+ const plan=routingPlan({...current,categories:source.plan!.before.categories},result.classification,result.limitations,layout,'type-folders',now);return {...plan,before:current};
 }
 function guard(c:ReviewContext){if(!c.paused())throw Error('review_pause_required');}
 export async function previewReview(c:ReviewContext,input:any):Promise<ReviewTicket>{
@@ -30,7 +33,7 @@ export async function previewReview(c:ReviewContext,input:any):Promise<ReviewTic
   let proposal:Job;
   if(ticket.operation==='rerun'){
    // Validate original state and exclusions BEFORE a billable classification.
-   if(!source.classification)throw Error('review_protected');rerunPlan(source,current,{classification:source.classification,limitations:source.limitations??[]},c.layout,c.now(),c.securityHold);
+   assertRerunEligible(source,current,c.layout,c.securityHold);
    if(!c.reserve())throw Error('review_budget_exhausted');
    const result=await c.classify(message);guard(c);
    const fresh=await c.mail.metadata(input.id);sameState(current,fresh,false);
